@@ -1,0 +1,1985 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบบริหารจัดการสินค้าในคลัง (Paknam Inventory 2026)</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Kanit -->
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <style>
+    body {
+      font-family: 'Kanit', sans-serif;
+    }
+    /* Dark Mode styles override standard Tailwind */
+    .dark {
+      background-color: #121212 !important;
+      color: #e4e4e7 !important;
+    }
+    .dark .bg-white {
+      background-color: #1e1e1e !important;
+    }
+    .dark .border-zinc-100, .dark .border-zinc-200 {
+      border-color: #2e2e2e !important;
+    }
+    .dark .text-zinc-800 {
+      color: #f4f4f5 !important;
+    }
+    .dark .text-zinc-600 {
+      color: #a1a1aa !important;
+    }
+    .dark .bg-zinc-50 {
+      background-color: #18181b !important;
+    }
+    /* Glassmorphism details */
+    .glass-card {
+      backdrop-filter: blur(8px);
+      background: rgba(255, 255, 255, 0.85);
+    }
+    .dark .glass-card {
+      backdrop-filter: blur(8px);
+      background: rgba(30, 30, 30, 0.8);
+    }
+    /* Hide scrollbars */
+    .scrollbar-none::-webkit-scrollbar {
+      display: none;
+    }
+    /* Print Setup */
+    @media print {
+      body {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .print-layout {
+        display: block !important;
+        width: 100% !important;
+      }
+      .print-card {
+        border: 1px solid #ddd !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+      }
+    }
+  </style>
+  <script>
+    // Tailwind Config for custom theme colors
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              light: '#4facfe',
+              pink: '#ff9a9e'
+            }
+          },
+          borderRadius: {
+            '2xl': '16px',
+            '3xl': '24px'
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-slate-50 text-zinc-800 min-h-screen transition-colors duration-300">
+
+  <!-- Loading Overlay -->
+  <div id="loading-screen" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md transition-opacity duration-300">
+    <div class="relative flex items-center justify-center">
+      <div class="w-16 h-16 border-4 border-sky-400 border-t-pink-400 rounded-full animate-spin"></div>
+      <div class="absolute text-transparent bg-clip-text bg-gradient-to-tr from-sky-400 to-pink-400 font-bold text-xs">PK</div>
+    </div>
+    <p class="text-xs font-semibold text-zinc-500 mt-4 tracking-wider animate-pulse">กำลังประมวลผลระบบ...</p>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full no-print"></div>
+
+  <!-- App Container (Hidden initially until script is ready) -->
+  <div id="app-container" class="hidden flex min-h-screen">
+    
+    <!-- Sidebar -->
+    <aside id="sidebar" class="no-print fixed inset-y-0 left-0 lg:sticky lg:h-screen w-[280px] bg-white border-r border-zinc-100 flex flex-col z-40 transition-transform duration-300 -translate-x-full lg:translate-x-0">
+      <!-- Store Header -->
+      <div class="flex p-6 items-center gap-3 border-b border-zinc-100/80">
+        <img id="sidebar-logo" src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=100" alt="Logo" class="w-10 h-10 rounded-2xl object-cover ring-2 ring-sky-50">
+        <div>
+          <h1 id="sidebar-store-name" class="text-sm font-bold text-transparent bg-clip-text bg-gradient-to-r from-sky-500 to-pink-500 line-clamp-1">ปากน้ำ สโตร์ 2026</h1>
+          <p class="text-[10px] text-zinc-400 font-medium">ระบบคลังสินค้า Paknam</p>
+        </div>
+      </div>
+
+      <!-- User Profile -->
+      <div class="mx-4 my-5 p-4 rounded-2xl bg-gradient-to-br from-sky-50/50 to-pink-50/50 border border-sky-100/30 flex items-center gap-3">
+        <div id="user-avatar" class="w-9 h-9 rounded-full bg-sky-400 text-white flex items-center justify-center font-bold text-sm shadow-inner">A</div>
+        <div class="flex-1 min-w-0">
+          <p id="user-display-name" class="text-xs font-bold text-zinc-800 truncate">ผู้ใช้งาน</p>
+          <span id="user-display-role" class="text-[9px] font-semibold text-sky-500 tracking-wider">STAFF</span>
+        </div>
+      </div>
+
+      <!-- Menu Navigation -->
+      <nav class="flex-1 px-3 space-y-1">
+        <button id="menu-dashboard" onclick="switchTab('dashboard')" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition-all text-zinc-500 hover:bg-zinc-50">
+          <i class="fa-solid fa-chart-pie w-4"></i> <span>หน้าแรกสรุปข้อมูล</span>
+        </button>
+        <button id="menu-inventory" onclick="switchTab('inventory')" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition-all text-zinc-500 hover:bg-zinc-50">
+          <i class="fa-solid fa-box w-4"></i> <span>คลังสินค้า</span>
+        </button>
+        <button id="menu-transactions" onclick="switchTab('transactions')" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition-all text-zinc-500 hover:bg-zinc-50">
+          <i class="fa-solid fa-exchange-alt w-4"></i> <span>ทำรายการเบิก/จ่าย</span>
+        </button>
+        <button id="menu-settings" onclick="switchTab('settings')" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition-all text-zinc-500 hover:bg-zinc-50">
+          <i class="fa-solid fa-sliders w-4"></i> <span>ตั้งค่าและพนักงาน</span>
+        </button>
+      </nav>
+
+      <!-- Bottom Actions -->
+      <div class="p-4 border-t border-zinc-100 space-y-2">
+        <button onclick="toggleDarkMode()" class="w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-[10px] font-bold text-zinc-500 hover:bg-zinc-50">
+          <span class="flex items-center gap-2">
+            <i class="fa-solid fa-moon text-sky-500"></i> โหมดสลับสีหน้าจอ
+          </span>
+          <div class="w-8 h-4.5 bg-zinc-200 rounded-full p-0.5" id="theme-switch-bg">
+            <div class="w-3.5 h-3.5 bg-white rounded-full transition-transform" id="theme-switch-thumb"></div>
+          </div>
+        </button>
+        <button onclick="handleLogout()" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold text-rose-500 hover:bg-rose-50">
+          <i class="fa-solid fa-right-from-bracket"></i> <span>ออกจากระบบ</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content Panel -->
+    <main class="flex-1 min-h-screen flex flex-col pt-16 lg:pt-0 overflow-x-hidden">
+      
+      <!-- Mobile Top Bar Header -->
+      <div class="lg:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-zinc-100 px-4 flex items-center justify-between z-30 no-print">
+        <div class="flex items-center gap-3">
+          <img id="mobile-logo" src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=100" alt="Logo" class="w-8 h-8 rounded-xl object-cover">
+          <div>
+            <h1 id="mobile-store-name" class="text-xs font-bold text-transparent bg-clip-text bg-gradient-to-r from-sky-500 to-pink-500">ปากน้ำ สโตร์</h1>
+            <p class="text-[8px] text-zinc-400">Paknam Inventory</p>
+          </div>
+        </div>
+        <button onclick="toggleMobileSidebar()" class="p-2 text-zinc-600 focus:outline-none">
+          <i class="fa-solid fa-bars text-xl"></i>
+        </button>
+      </div>
+
+      <!-- Backdrop for Mobile Sidebar -->
+      <div id="mobile-sidebar-backdrop" onclick="toggleMobileSidebar()" class="hidden lg:hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-30 no-print"></div>
+
+      <!-- Content Views Wrapper -->
+      <div class="p-4 md:p-8 flex-1 space-y-6">
+        
+        <!-- ==============================================
+             A. LOGIN SCREEN
+             ============================================== -->
+        <div id="view-login" class="max-w-md mx-auto my-12 bg-white rounded-3xl border border-zinc-100 p-8 shadow-xl space-y-6 no-print">
+          <div class="text-center space-y-2">
+            <img id="login-logo" src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=150" alt="Store Logo" class="w-16 h-16 rounded-3xl object-cover mx-auto ring-4 ring-sky-50">
+            <h2 id="login-title" class="text-lg font-black text-zinc-800">ลงชื่อเข้าใช้คลังสินค้า Paknam</h2>
+            <p class="text-xs text-zinc-400">เข้าสู่ระบบเพื่อตรวจสอบสต๊อกและรายงาน</p>
+          </div>
+
+          <form onsubmit="handleLoginSubmit(event)" class="space-y-4">
+            <div class="space-y-1">
+              <label class="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">ชื่อผู้ใช้ (Username)</label>
+              <input type="text" id="login-username" required placeholder="admin" class="w-full px-4 py-3 bg-zinc-50 border border-zinc-100 rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-sky-500/20">
+            </div>
+            <div class="space-y-1">
+              <label class="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">รหัสผ่าน (Password)</label>
+              <input type="password" id="login-password" required placeholder="••••••••" class="w-full px-4 py-3 bg-zinc-50 border border-zinc-100 rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-sky-500/20">
+            </div>
+            <button type="submit" class="w-full py-3.5 bg-gradient-to-r from-sky-400 to-sky-600 text-white font-bold text-xs rounded-2xl shadow-md shadow-sky-400/20 hover:opacity-95 active:scale-[0.98] transition-all">
+              ลงชื่อเข้าสู่ระบบคลังสินค้า
+            </button>
+          </form>
+        </div>
+
+        <!-- ==============================================
+             B. DASHBOARD VIEW (ADMIN ONLY)
+             ============================================== -->
+        <div id="tab-dashboard" class="hidden tab-view space-y-6">
+          <div class="flex justify-between items-center pb-4 border-b">
+            <div>
+              <h2 class="text-xl font-extrabold text-zinc-800">สรุปภาพรวมคลังสินค้าอัจฉริยะ</h2>
+              <p class="text-xs text-zinc-400 mt-0.5">ภาพรวมจำหน่าย สต๊อกใกล้หมดคลัง และการเคลื่อนไหว</p>
+            </div>
+          </div>
+
+          <!-- Quick statistics grid -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- SKUs -->
+            <div class="bg-white border rounded-2xl p-5 flex items-center justify-between">
+              <div>
+                <p class="text-[10px] font-bold text-zinc-400">รายการสินค้าทั้งหมด</p>
+                <h4 id="dash-sku-count" class="text-2xl font-black mt-1">0</h4>
+                <span class="text-[9px] text-zinc-400">รายการ (SKUs)</span>
+              </div>
+              <div class="w-10 h-10 bg-sky-50 text-sky-500 rounded-xl flex items-center justify-center text-lg"><i class="fa-solid fa-box"></i></div>
+            </div>
+            <!-- Alert Stock -->
+            <div id="dash-alert-card" class="bg-white border rounded-2xl p-5 flex items-center justify-between">
+              <div>
+                <p class="text-[10px] font-bold text-zinc-400">สต๊อกระดับวิกฤต</p>
+                <h4 id="dash-low-stock" class="text-2xl font-black text-rose-500 mt-1">0</h4>
+                <span id="dash-low-stock-status" class="text-[9px] text-rose-500 font-medium">⚠️ ใกล้หมดคลัง</span>
+              </div>
+              <div class="w-10 h-10 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center text-lg"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            </div>
+            <!-- OUT accumulated -->
+            <div class="bg-white border rounded-2xl p-5 flex items-center justify-between">
+              <div>
+                <p class="text-[10px] font-bold text-zinc-400">ยอดการเบิกสะสม</p>
+                <h4 id="dash-qty-out" class="text-2xl font-black mt-1">0</h4>
+                <span class="text-[9px] text-zinc-400">ชิ้น (OUT)</span>
+              </div>
+              <div class="w-10 h-10 bg-pink-50 text-pink-500 rounded-xl flex items-center justify-center text-lg"><i class="fa-solid fa-arrow-up-from-bracket"></i></div>
+            </div>
+            <!-- DEFECT accumulated -->
+            <div class="bg-white border rounded-2xl p-5 flex items-center justify-between">
+              <div>
+                <p class="text-[10px] font-bold text-zinc-400">ชำรุดเสียหายรวม</p>
+                <h4 id="dash-qty-defect" class="text-2xl font-black mt-1">0</h4>
+                <span class="text-[9px] text-zinc-400">รายการ (DEFECT)</span>
+              </div>
+              <div class="w-10 h-10 bg-amber-50 text-amber-500 rounded-xl flex items-center justify-center text-lg"><i class="fa-solid fa-dumpster-fire"></i></div>
+            </div>
+          </div>
+
+          <!-- Charts Row -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Custom Category Chart representation -->
+            <div class="bg-white border rounded-2xl p-5 space-y-4">
+              <h3 class="font-extrabold text-xs text-zinc-700 uppercase">ระดับสต๊อกสินค้าคงคลังจำแนกรายหมวดหมู่</h3>
+              <div id="chart-categories" class="space-y-3.5">
+                <p class="text-center text-xs py-10 text-zinc-400">ไม่มีข้อมูลหมวดหมู่ในระบบ</p>
+              </div>
+            </div>
+
+            <!-- Custom Transaction proportions -->
+            <div class="bg-white border rounded-2xl p-5 space-y-4 flex flex-col justify-between">
+              <h3 class="font-extrabold text-xs text-zinc-700 uppercase">สัดส่วนรายละเอียดการทำธุรกรรมคลัง</h3>
+              <div id="chart-transactions" class="flex flex-col items-center py-4 space-y-3">
+                <p class="text-center text-xs py-10 text-zinc-400">ไม่มีข้อมูลประวัติธุรกรรม</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==============================================
+             C. INVENTORY VIEW
+             ============================================== -->
+        <div id="tab-inventory" class="hidden tab-view space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b">
+            <div>
+              <h2 class="text-xl font-extrabold text-zinc-800">ระบบบริหารจัดการสต๊อกสินค้า</h2>
+              <p class="text-xs text-zinc-400 mt-0.5">ตรวจสอบจำนวน เพิ่ม-แก้ไข และสั่งพิมพ์รายงานคลังสินค้า</p>
+            </div>
+            <div class="flex items-center gap-2 no-print">
+              <button onclick="window.print()" class="px-4 py-2.5 border rounded-2xl bg-white hover:bg-zinc-50 font-bold text-xs flex items-center gap-1.5 text-zinc-600">
+                <i class="fa-solid fa-print"></i> พิมพ์รายงานสรุป
+              </button>
+              <button id="btn-add-product" onclick="openProductFormModal()" class="hidden px-4 py-2.5 bg-gradient-to-r from-sky-400 to-sky-600 text-white font-bold text-xs rounded-2xl hover:opacity-90 transition-all flex items-center gap-1.5">
+                <i class="fa-solid fa-plus"></i> เพิ่มสินค้าใหม่
+              </button>
+            </div>
+          </div>
+
+          <!-- PRINT ONLY HEADER -->
+          <div class="hidden print:block border-b pb-4 mb-4">
+            <h2 id="print-store-title" class="text-lg font-bold">ระบบรายงานคลังสินค้า</h2>
+            <p id="print-store-address" class="text-[10px] text-zinc-500"></p>
+            <p id="print-store-phone" class="text-[10px] text-zinc-500"></p>
+          </div>
+
+          <!-- Search Filters -->
+          <div class="bg-white border rounded-2xl p-4 flex flex-col sm:flex-row gap-4 items-center justify-between no-print">
+            <div class="relative w-full sm:max-w-xs">
+              <span class="absolute inset-y-0 left-3 flex items-center text-zinc-400">
+                <i class="fa-solid fa-magnifying-glass"></i>
+              </span>
+              <input type="text" id="inventory-search" oninput="renderInventory()" placeholder="ค้นหารหัส ชื่อ หมวดหมู่..." class="w-full pl-9 pr-4 py-2.5 bg-zinc-50 border border-zinc-100 rounded-xl text-xs focus:outline-none">
+            </div>
+            
+            <!-- Category Quick filter tabs -->
+            <div id="inventory-categories-tabs" class="flex gap-1.5 overflow-x-auto w-full sm:w-auto scrollbar-none py-1">
+              <!-- Dynamically rendered tabs -->
+            </div>
+          </div>
+
+          <!-- Products Table Grouped by Category -->
+          <div id="inventory-grouped-container" class="space-y-6">
+            <!-- Dynamically populated tables -->
+          </div>
+        </div>
+
+        <!-- ==============================================
+             D. TRANSACTIONS VIEW
+             ============================================== -->
+        <div id="tab-transactions" class="hidden tab-view space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b">
+            <div>
+              <h2 class="text-xl font-extrabold text-zinc-800">ระบบประวัติและทำรายการคลังสินค้า</h2>
+              <p class="text-xs text-zinc-400 mt-0.5">เบิกใช้งาน คืนสินค้า หรือแจ้งสินค้าเสียหายเข้า Drive</p>
+            </div>
+            
+            <div class="flex bg-zinc-50 p-1 border rounded-xl no-print">
+              <button onclick="switchTxSubTab('create')" id="btn-tx-sub-create" class="px-4 py-2 rounded-lg text-xs font-bold bg-white text-sky-500 shadow-sm transition-all">✍️ ลงรายการธุรกรรม</button>
+              <button onclick="switchTxSubTab('history')" id="btn-tx-sub-history" class="px-4 py-2 rounded-lg text-xs font-bold text-zinc-500 transition-all">⏳ ตรวจสอบประวัติ</button>
+            </div>
+          </div>
+
+          <!-- 1. Transaction Form Subview -->
+          <div id="tx-sub-create-panel" class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <form onsubmit="handleTxSubmit(event)" class="lg:col-span-8 bg-white border p-6 rounded-2xl shadow-sm space-y-4">
+              <h3 class="font-extrabold text-xs text-zinc-700 uppercase pb-2 border-b">บันทึกประวัติการเบิก/จ่ายสต๊อก</h3>
+              
+              <!-- Action Type -->
+              <div class="space-y-2">
+                <label class="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">เลือกประเภทธุรกรรม</label>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <button type="button" onclick="setTxType('IN')" id="tx-type-IN" class="py-3 border-2 border-sky-500 bg-sky-50/50 text-sky-500 font-bold text-xs rounded-xl flex flex-col items-center gap-1">
+                    <i class="fa-solid fa-circle-down"></i> รับเข้าสต๊อก (IN)
+                  </button>
+                  <button type="button" onclick="setTxType('OUT')" id="tx-type-OUT" class="py-3 border border-zinc-100 bg-zinc-50 text-zinc-500 font-bold text-xs rounded-xl flex flex-col items-center gap-1">
+                    <i class="fa-solid fa-circle-up"></i> เบิกจ่าย (OUT)
+                  </button>
+                  <button type="button" onclick="setTxType('RETURN')" id="tx-type-RETURN" class="py-3 border border-zinc-100 bg-zinc-50 text-zinc-500 font-bold text-xs rounded-xl flex flex-col items-center gap-1">
+                    <i class="fa-solid fa-rotate-left"></i> คืนสินค้า (RETURN)
+                  </button>
+                  <button type="button" onclick="setTxType('DEFECT')" id="tx-type-DEFECT" class="py-3 border border-zinc-100 bg-zinc-50 text-zinc-500 font-bold text-xs rounded-xl flex flex-col items-center gap-1">
+                    <i class="fa-solid fa-triangle-exclamation"></i> แจ้งชำรุด (DEFECT)
+                  </button>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <!-- Product Selected -->
+                <div class="space-y-1">
+                  <label class="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">เลือกสินค้าในคลัง</label>
+                  <select id="tx-productId" onchange="handleTxProductChange()" required class="w-full px-3 py-2.5 bg-zinc-50 border border-zinc-100 rounded-xl text-xs focus:outline-none">
+                    <option value="">-- กรุณาเลือกสินค้า --</option>
+                  </select>
+                </div>
+                <!-- Qty -->
+                <div class="space-y-1">
+                  <label class="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">จำนวนสินค้าที่บันทึก</label>
+                  <input type="number" id="tx-qty" required min="1" placeholder="เช่น 5" class="w-full px-3 py-2.5 bg-zinc-50 border border-zinc-100 rounded-xl text-xs focus:outline-none">
+                </div>
+              </div>
+
+              <!-- Return Condition Extra Info -->
+              <div id="tx-return-extra" class="hidden p-4 rounded-xl bg-zinc-50 border space-y-2 animate-fade-in">
+                <label class="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">ระบุสภาพสินค้าส่งคืน</label>
+                <div class="flex gap-4">
+                  <label class="flex items-center gap-1.5 cursor-pointer text-xs text-zinc-700 font-semibold">
+                    <input type="radio" name="tx-condition" value="สมบูรณ์" checked> สภาพสมบูรณ์ดี (ปรับสต๊อกเพิ่มกลับ)
+                  </label>
+                  <label class="flex items-center gap-1.5 cursor-pointer text-xs text-zinc-700 font-semibold">
+                    <input type="radio" name="tx-condition" value="ชำรุด"> ชำรุดเสียหาย (ไม่ปรับสต๊อกเพิ่ม)
+                  </label>
+                </div>
+              </div>
+
+              <!-- Defect Extra Info -->
+              <div id="tx-defect-extra" class="hidden p-4 rounded-xl bg-zinc-50 border space-y-3 animate-fade-in">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div class="space-y-1">
+                    <label class="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">ลักษณะความเสียหาย</label>
+                    <select id="tx-defectType" class="w-full px-3 py-2 bg-white border rounded-xl text-xs">
+                      <option value="แตกหักเสียหาย">แตกหักเสียหาย</option>
+                      <option value="เปียกชื้น / คราบสกปรก">เปียกชื้น / คราบสกปรก</option>
+                      <option value="บรรจุภัณฑ์บุบสลาย">บรรจุภัณฑ์บุบสลาย</option>
+                      <option value="สูญหายบางส่วน">สูญหายบางส่วน</option>
+                    </select>
+                  </div>
+                  <!-- Attach photo -->
+                  <div class="space-y-1">
+                    <label class="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">แนบหลักฐานภาพถ่ายชำรุด (ส่งเข้า Drive)</label>
+                    <div class="flex items-center gap-2">
+                      <button type="button" onclick="triggerTxImageUpload()" class="px-3 py-2 border rounded-xl bg-white text-xs font-bold hover:bg-zinc-50 flex items-center gap-1 text-zinc-600">
+                        <i class="fa-solid fa-image text-zinc-400"></i> เลือกรูปถ่าย
+                      </button>
+                      <input type="file" id="tx-file-input" onchange="handleTxFileChange(event)" accept="image/*" class="hidden">
+                      <span id="tx-file-status" class="text-[10px] text-zinc-400 font-medium truncate">ไม่ได้แนบรูป</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- General Note -->
+              <div class="space-y-1">
+                <label class="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">บันทึกเพิ่มเติม (หมายเหตุ / เลขที่ใบงาน)</label>
+                <textarea id="tx-note" rows="3" placeholder="เช่น แผนกจัดเตรียมสินค้าเบิกใช้งานฉุกเฉิน..." class="w-full px-3 py-2.5 bg-zinc-50 border border-zinc-100 rounded-xl text-xs focus:outline-none"></textarea>
+              </div>
+
+              <div class="flex justify-end pt-2 border-t">
+                <button type="submit" class="px-6 py-3 bg-gradient-to-r from-sky-400 to-sky-600 text-white font-bold text-xs rounded-xl flex items-center gap-1">
+                  <i class="fa-solid fa-check"></i> บันทึกรายการ
+                </button>
+              </div>
+            </form>
+
+            <!-- Product detail helper sidebar -->
+            <div class="lg:col-span-4 bg-zinc-50/50 border p-5 rounded-2xl space-y-4">
+              <h4 class="font-bold text-zinc-700 text-xs">📍 สรุปข้อมูลสินค้าคงคลังปัจจุบัน</h4>
+              <div id="tx-product-detail-card" class="text-center py-10 text-zinc-400 text-xs">
+                กรุณาเลือกรายการสินค้าจากช่องค้นหาทางซ้าย เพื่อดูสถานะสต๊อกคงเหลือก่อนเบิก
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Transaction History Subview -->
+          <div id="tx-sub-history-panel" class="hidden space-y-4">
+            <div class="bg-white border rounded-2xl p-4 flex flex-col sm:flex-row gap-4 items-center justify-between">
+              <!-- Search bar -->
+              <div class="relative w-full sm:max-w-xs">
+                <span class="absolute inset-y-0 left-3 flex items-center text-zinc-400">
+                  <i class="fa-solid fa-magnifying-glass"></i>
+                </span>
+                <input type="text" id="tx-search-history" oninput="renderTxHistory()" placeholder="ค้นหารายการ, พนักงาน..." class="w-full pl-9 pr-4 py-2.5 bg-zinc-50 border rounded-xl text-xs focus:outline-none">
+              </div>
+
+              <!-- Filters tabs -->
+              <div class="flex gap-1 overflow-x-auto">
+                <button onclick="setTxFilterType('ทั้งหมด')" id="tx-filter-tab-ทั้งหมด" class="px-3 py-1.5 rounded-full text-xs font-bold bg-sky-500 text-white shadow-sm shrink-0">ทั้งหมด</button>
+                <button onclick="setTxFilterType('IN')" id="tx-filter-tab-IN" class="px-3 py-1.5 rounded-full text-xs font-bold text-zinc-500 hover:bg-zinc-50 shrink-0">IN</button>
+                <button onclick="setTxFilterType('OUT')" id="tx-filter-tab-OUT" class="px-3 py-1.5 rounded-full text-xs font-bold text-zinc-500 hover:bg-zinc-50 shrink-0">OUT</button>
+                <button onclick="setTxFilterType('RETURN')" id="tx-filter-tab-RETURN" class="px-3 py-1.5 rounded-full text-xs font-bold text-zinc-500 hover:bg-zinc-50 shrink-0">RETURN</button>
+                <button onclick="setTxFilterType('DEFECT')" id="tx-filter-tab-DEFECT" class="px-3 py-1.5 rounded-full text-xs font-bold text-zinc-500 hover:bg-zinc-50 shrink-0">DEFECT</button>
+              </div>
+            </div>
+
+            <!-- List of Logs -->
+            <div id="tx-history-log-list" class="space-y-3">
+              <!-- Dynamically populated transaction items -->
+            </div>
+          </div>
+        </div>
+
+        <!-- ==============================================
+             E. SETTINGS & USER MANAGEMENT (ADMIN ONLY)
+             ============================================== -->
+        <div id="tab-settings" class="hidden tab-view space-y-6">
+          <div class="pb-4 border-b">
+            <h2 class="text-xl font-extrabold text-zinc-800">จัดการข้อมูลร้านและระบบพนักงาน</h2>
+            <p class="text-xs text-zinc-400 mt-0.5">แก้ไขโลโก้แบรนด์, ที่อยู่ และกำหนดระดับความปลอดภัยพนักงาน</p>
+          </div>
+
+          <!-- Store and general settings -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+            
+            <!-- Store config form -->
+            <form onsubmit="handleStoreSettingsSubmit(event)" class="bg-white border p-6 rounded-2xl shadow-sm space-y-4">
+              <h3 class="font-extrabold text-xs text-zinc-700 uppercase pb-2 border-b">ข้อมูลทั่วไปของร้านค้า</h3>
+              
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="space-y-1">
+                  <label class="text-[10px] font-bold text-zinc-400 uppercase">ชื่อร้านสโตร์</label>
+                  <input type="text" id="settings-storeName" required class="w-full px-3 py-2 bg-zinc-50 border rounded-xl text-xs focus:outline-none">
+                </div>
+                <div class="space-y-1">
+                  <label class="text-[10px] font-bold text-zinc-400 uppercase">เบอร์โทรติดต่อ</label>
+                  <input type="text" id="settings-storePhone" required class="w-full px-3 py-2 bg-zinc-50 border rounded-xl text-xs focus:outline-none">
+                </div>
+              </div>
+
+              <div class="space-y-1">
+                <label class="text-[10px] font-bold text-zinc-400 uppercase">ลิงก์ URL โลโก้</label>
+                <input type="url" id="settings-storeLogo" required class="w-full px-3 py-2 bg-zinc-50 border rounded-xl text-xs focus:outline-none">
+              </div>
+
+              <div class="space-y-1">
+                <label class="text-[10px] font-bold text-zinc-400 uppercase">ที่อยู่ร้านสโตร์สำหรับหัวเอกสาร</label>
+                <textarea id="settings-storeAddress" rows="2" required class="w-full px-3 py-2 bg-zinc-50 border rounded-xl text-xs focus:outline-none"></textarea>
+              </div>
+
+              <div class="flex justify-end pt-2 border-t">
+                <button type="submit" class="px-5 py-2.5 bg-gradient-to-r from-sky-400 to-sky-600 text-white font-bold text-xs rounded-xl flex items-center gap-1">
+                  <i class="fa-solid fa-floppy-disk"></i> บันทึกตั้งค่า
+                </button>
+              </div>
+            </form>
+
+            {/* API links */}
+            <div class="bg-white border p-6 rounded-2xl shadow-sm space-y-4">
+              <h3 class="font-extrabold text-xs text-zinc-700 uppercase pb-2 border-b">เชื่อมโยงสิทธิ์การใช้งาน API</h3>
+              <p class="text-[11px] text-zinc-500 leading-relaxed">
+                เนื่องจากโปรแกรมทำงานแบบเชื่อมต่อ <strong>Google Sheets Database</strong> และ <strong>Google Drive</strong> โดยตรง จำเป็นต้องใช้สิทธิ์อนุญาตเข้าจัดการไฟล์เพื่อหลีกเลี่ยงข้อผิดพลาดในการอัปโหลดรูปภาพสินค้า
+              </p>
+              
+              <div class="space-y-2.5 pt-2">
+                <button onclick="handleForceAuthorize()" class="w-full py-3 bg-zinc-50 hover:bg-zinc-100 font-bold text-xs text-zinc-600 border rounded-xl flex items-center justify-center gap-2 transition-colors">
+                  <i class="fa-solid fa-key text-zinc-400"></i> ขอสิทธิ์การจัดการไดร์ฟภาพ (forceAuthorize)
+                </button>
+                <button onclick="handleSetupDatabase()" class="w-full py-3 bg-sky-50 text-sky-500 hover:bg-sky-100/60 font-bold text-xs border border-sky-100/50 rounded-xl flex items-center justify-center gap-2 transition-colors">
+                  <i class="fa-solid fa-database text-sky-400"></i> ล้างและตั้งตารางเริ่มต้น (setupDatabase)
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Users Management -->
+          <div class="bg-white border rounded-2xl p-6 shadow-sm space-y-4">
+            <div class="flex items-center justify-between border-b pb-3">
+              <h3 class="font-extrabold text-xs text-zinc-700 uppercase">รายชื่อบัญชีผู้ใช้งานพนักงานทั้งหมด</h3>
+              <button onclick="openUserFormModal()" class="px-3.5 py-2 bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs rounded-xl flex items-center gap-1">
+                <i class="fa-solid fa-plus"></i> เพิ่มพนักงาน
+              </button>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead>
+                  <tr class="border-b text-zinc-400 uppercase font-bold tracking-wider">
+                    <th class="py-2 px-3">ชื่อ-นามสกุลพนักงาน</th>
+                    <th class="py-2 px-3">ชื่อผู้ใช้ (Username)</th>
+                    <th class="py-2 px-3">รหัสผ่าน (Password)</th>
+                    <th class="py-2 px-3 text-center">สิทธิ์ใช้งาน</th>
+                    <th class="py-2 px-3 text-right">การจัดการ</th>
+                  </tr>
+                </thead>
+                <tbody id="settings-users-list" class="divide-y text-zinc-700">
+                  <!-- Dynamically populated rows -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- ==============================================
+       MODALS SECTION
+       ============================================== -->
+
+  <!-- PRODUCT EDIT/ADD MODAL -->
+  <div id="modal-product" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="closeProductFormModal()"></div>
+    <div class="bg-white rounded-3xl w-full max-w-lg overflow-hidden relative shadow-2xl p-6 space-y-4">
+      <div class="flex items-center justify-between border-b pb-3">
+        <h3 id="product-modal-title" class="text-sm font-extrabold">เพิ่มสินค้าใหม่</h3>
+        <button onclick="closeProductFormModal()" class="text-zinc-400 hover:text-zinc-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <form onsubmit="handleProductSubmit(event)" class="space-y-4">
+        <input type="hidden" id="prod-id">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold text-zinc-400 uppercase">รหัสสินค้า (Product Code)</label>
+            <input type="text" id="prod-code" required placeholder="เช่น PROD-001" class="w-full px-3 py-2 bg-zinc-50 border rounded-xl text-xs focus:outline-none">
+          </div>
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold text-zinc-400 uppercase">ชื่อสินค้า (Product Name)</label>
+            <input type="text" id="prod-name" required placeholder="เช่น กล่อง Size A" class="w-full px-3 py-2 bg-zinc-50 border rounded-xl text-xs focus:outline-none">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold text-zinc-400 uppercase">หมวดหมู่สินค้า (Category)</label>
+            <input type="text" id="prod-category" required placeholder="เช่น อุปกรณ์แพ็คกิ้ง" class="w-full px-3 py-2 bg-zinc-50 border rounded-xl text-xs focus:outline-none">
+          </div>
+          <div class="space-y-1">
+            <label class="text-[10px] font-bold text-zinc-400 uppercase">แจ้งเตือนสต๊อกขั้นต่ำ (Min Stock)</label>
+            <input type="number" id="prod-min" required min="0" placeholder="เช่น 20" class="w-full px-3 py-2 bg-zinc-50 border rounded-xl text-xs focus:outline-none">
+          </div>
+        </div>
+
+        <div id="prod-stock-container" class="space-y-1">
+          <label class="text-[10px] font-bold text-zinc-400 uppercase">จำนวนเริ่มต้นสต๊อก (Stock)</label>
+          <input type="number" id="prod-stock" min="0" placeholder="เช่น 100" class="w-full px-3 py-2 bg-zinc-50 border rounded-xl text-xs focus:outline-none">
+        </div>
+
+        <!-- Image Compressor input -->
+        <div class="space-y-2">
+          <label class="text-[10px] font-bold text-zinc-400 uppercase">อัปโหลดรูปภาพสินค้า (เก็บลง Google Drive)</label>
+          <div class="flex items-center gap-4 p-3 rounded-xl bg-zinc-50 border">
+            <div id="prod-img-preview-container" class="w-14 h-14 bg-white rounded-lg overflow-hidden border flex items-center justify-center">
+              <i class="fa-solid fa-image text-zinc-300 text-xl"></i>
+            </div>
+            <div class="flex-1 space-y-1">
+              <p class="text-[9px] text-zinc-400">ระบบจะจำกัดความกว้างรูปภาพไม่เกิน 600px เพื่อความลื่นไหลในการทำงาน</p>
+              <button type="button" onclick="triggerProductImageUpload()" class="px-2.5 py-1.5 border rounded-lg bg-white text-[10px] font-bold hover:bg-zinc-50 text-zinc-600">
+                เลือกรูปสินค้า
+              </button>
+              <input type="file" id="prod-file-input" onchange="handleProductFileChange(event)" accept="image/*" class="hidden">
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-end pt-2 border-t gap-2">
+          <button type="button" onclick="closeProductFormModal()" class="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-xs font-bold text-zinc-600 rounded-xl">ยกเลิก</button>
+          <button type="submit" class="px-5 py-2.5 bg-sky-500 text-white font-bold text-xs rounded-xl">บันทึกสินค้า</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- USER FORM MODAL -->
+  <div id="modal-user" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="closeUserFormModal()"></div>
+    <div class="bg-white rounded-3xl w-full max-w-sm overflow-hidden relative shadow-2xl p-6 space-y-4">
+      <div class="flex items-center justify-between border-b pb-2">
+        <h3 id="user-modal-title" class="text-sm font-extrabold">เพิ่มพนักงานใหม่</h3>
+        <button onclick="closeUserFormModal()" class="text-zinc-400 hover:text-zinc-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <form onsubmit="handleUserSubmit(event)" class="space-y-4">
+        <input type="hidden" id="user-id">
+        <div class="space-y-1">
+          <label class="text-[10px] font-bold text-zinc-400 uppercase">ชื่อ-นามสกุลพนักงาน</label>
+          <input type="text" id="user-name" required placeholder="เช่น สมเกียรติ สมจิต" class="w-full px-3 py-2 bg-zinc-50 border rounded-xl text-xs focus:outline-none">
+        </div>
+        <div class="space-y-1">
+          <label class="text-[10px] font-bold text-zinc-400 uppercase">ชื่อผู้ใช้ล็อกอิน (Username)</label>
+          <input type="text" id="user-username" required placeholder="somkiat" class="w-full px-3 py-2 bg-zinc-50 border rounded-xl text-xs focus:outline-none">
+        </div>
+        <div class="space-y-1">
+          <label class="text-[10px] font-bold text-zinc-400 uppercase">รหัสผ่าน (Password)</label>
+          <input type="password" id="user-password" required placeholder="admin123" class="w-full px-3 py-2 bg-zinc-50 border rounded-xl text-xs focus:outline-none">
+        </div>
+        <div class="space-y-1">
+          <label class="text-[10px] font-bold text-zinc-400 uppercase font-bold block">กำหนดสิทธิ์พนักงาน</label>
+          <select id="user-role" class="w-full px-3 py-2 bg-zinc-50 border rounded-xl text-xs">
+            <option value="user">พนักงานคลัง (Staff User: เบิก/จ่าย/คืน)</option>
+            <option value="admin">ผู้ดูแลระบบคลัง (Admin: จัดการได้ทั้งหมด)</option>
+          </select>
+        </div>
+
+        <div class="flex justify-end pt-2 border-t gap-2">
+          <button type="button" onclick="closeUserFormModal()" class="px-4 py-2 bg-zinc-100 text-xs font-bold text-zinc-600 rounded-xl">ยกเลิก</button>
+          <button type="submit" class="px-5 py-2.5 bg-sky-500 text-white font-bold text-xs rounded-xl">บันทึกพนักงาน</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- DELETE PRODUCT CONFIRMATION MODAL -->
+  <div id="modal-delete-product" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="closeDeleteProductModal()"></div>
+    <div class="bg-white rounded-3xl w-full max-w-sm overflow-hidden relative shadow-2xl p-6 space-y-4 text-center">
+      <div class="w-12 h-12 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center text-xl mx-auto"><i class="fa-solid fa-trash-can"></i></div>
+      <div class="space-y-1.5">
+        <h3 class="font-extrabold text-sm text-zinc-800">ยืนยันการลบข้อมูลสินค้า?</h3>
+        <p class="text-xs text-zinc-400 leading-relaxed">คุณต้องการลบข้อมูลสินค้านี้ออกสารบบอย่างถาวรหรือไม่? การลบไม่สามารถย้อนคืนได้</p>
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button onclick="closeDeleteProductModal()" class="px-4 py-2.5 bg-zinc-100 hover:bg-zinc-200 text-xs font-bold text-zinc-600 rounded-xl flex-1">ยกเลิก</button>
+        <button id="btn-confirm-delete-prod" class="px-4 py-2.5 bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs rounded-xl flex-1">ลบสินค้า</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DELETE USER CONFIRMATION MODAL -->
+  <div id="modal-delete-user" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="closeDeleteUserModal()"></div>
+    <div class="bg-white rounded-3xl w-full max-w-sm overflow-hidden relative shadow-2xl p-6 space-y-4 text-center">
+      <div class="w-12 h-12 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center text-xl mx-auto"><i class="fa-solid fa-user-minus"></i></div>
+      <div class="space-y-1.5">
+        <h3 class="font-extrabold text-sm text-zinc-800">ลบบัญชีผู้ใช้พนักงาน?</h3>
+        <p class="text-xs text-zinc-400 leading-relaxed">คุณแน่ใจว่าต้องการระงับสิทธิ์และลบสิทธิเข้าใช้งานของพนักงานรายนี้ออกจากระบบคลัง?</p>
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button onclick="closeDeleteUserModal()" class="px-4 py-2.5 bg-zinc-100 text-xs font-bold text-zinc-600 rounded-xl flex-1">ยกเลิก</button>
+        <button id="btn-confirm-delete-user" class="px-4 py-2.5 bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs rounded-xl flex-1">ลบบัญชี</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==============================================
+       CLIENT-SIDE JAVASCRIPT SYSTEM ENGINE
+       ============================================== -->
+  <script>
+    // State values in memory
+    let state = {
+      isDarkMode: false,
+      activeTab: 'login', // current tab
+      txSubTab: 'create', // transactions sub-tab
+      currentUser: null,  // authenticated session user
+      storeSettings: {
+        storeName: "ปากน้ำ สโตร์ 2026",
+        storeAddress: "123/45 ถนนประโคนชัย ต.ปากน้ำ อ.เมือง จ.สมุทรปราการ 10270",
+        storePhone: "081-234-5678",
+        storeLogo: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=200"
+      },
+      products: [],
+      transactions: [],
+      users: [],
+      selectedTxType: 'IN', // active IN/OUT state
+      txFilterType: 'ทั้งหมด',
+      inventorySelectedCategory: 'ทั้งหมด',
+      
+      // Temporary base64 for image compression uploads
+      tempProductImageBase64: '',
+      tempTxImageBase64: ''
+    };
+
+    // Initialize Web App
+    window.onload = function() {
+      // Check if executing inside Google Apps Script env
+      const isGAS = typeof google !== 'undefined' && typeof google.script !== 'undefined';
+      
+      if (isGAS) {
+        loadDataFromGAS();
+      } else {
+        // Fallback mockup system for testing / development inside local React sandboxes
+        setupLocalMockData();
+        loadDataFromLocal();
+      }
+    };
+
+    // LocalStorage key values for sandbox previewing
+    const LS_PRODUCTS = 'paknam_products';
+    const LS_TRANSACTIONS = 'paknam_transactions';
+    const LS_USERS = 'paknam_users';
+    const LS_SETTINGS = 'paknam_settings';
+
+    function setupLocalMockData() {
+      if (!localStorage.getItem(LS_PRODUCTS)) {
+        localStorage.setItem(LS_PRODUCTS, JSON.stringify([
+          { id: "P001", code: "PROD-001", name: "กล่องพัสดุ Size A", category: "อุปกรณ์แพ็คกิ้ง", stock: 150, min: 30, imageUrl: "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&q=80&w=150" },
+          { id: "P002", code: "PROD-002", name: "เทปกาวปิดกล่อง 2 นิ้ว", category: "อุปกรณ์แพ็คกิ้ง", stock: 85, min: 20, imageUrl: "https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&q=80&w=150" },
+          { id: "P003", code: "PROD-003", name: "ซองกันกระแทก 5x8 นิ้ว", category: "อุปกรณ์แพ็คกิ้ง", stock: 15, min: 50, imageUrl: "https://images.unsplash.com/photo-1513151233558-d860c5398176?auto=format&fit=crop&q=80&w=150" },
+          { id: "P004", code: "PROD-004", name: "กระดาษพิมพ์สติกเกอร์ A4", category: "เครื่องเขียน", stock: 200, min: 40, imageUrl: "https://images.unsplash.com/photo-1586075010923-2dd4570fb338?auto=format&fit=crop&q=80&w=150" }
+        ]));
+      }
+      if (!localStorage.getItem(LS_USERS)) {
+        localStorage.setItem(LS_USERS, JSON.stringify([
+          { id: "U001", username: "admin", password: "admin123", name: "ผู้ดูแลระบบ (Admin)", role: "admin" },
+          { id: "U002", username: "user", password: "user123", name: "พนักงานคลัง (User)", role: "user" }
+        ]));
+      }
+      if (!localStorage.getItem(LS_SETTINGS)) {
+        localStorage.setItem(LS_SETTINGS, JSON.stringify(state.storeSettings));
+      }
+      if (!localStorage.getItem(LS_TRANSACTIONS)) {
+        localStorage.setItem(LS_TRANSACTIONS, JSON.stringify([
+          { id: "TX001", type: "IN", productId: "P001", qty: 50, date: "2026-07-01 10:15:30", note: "จัดเตรียมสต๊อกแรกเริ่ม", user: "ผู้ดูแลระบบ (Admin)" },
+          { id: "TX002", type: "OUT", productId: "P003", qty: 35, date: "2026-07-02 14:20:11", note: "เบิกใช้งานเตรียมจัดส่งประจำวัน", user: "พนักงานคลัง (User)" }
+        ]));
+      }
+    }
+
+    // Load state from local memory fallback
+    function loadDataFromLocal() {
+      state.products = JSON.parse(localStorage.getItem(LS_PRODUCTS) || '[]');
+      state.transactions = JSON.parse(localStorage.getItem(LS_TRANSACTIONS) || '[]');
+      state.users = JSON.parse(localStorage.getItem(LS_USERS) || '[]');
+      state.storeSettings = JSON.parse(localStorage.getItem(LS_SETTINGS) || JSON.stringify(state.storeSettings));
+      
+      applyStoreSettings();
+      document.getElementById('loading-screen').classList.add('opacity-0');
+      setTimeout(() => {
+        document.getElementById('loading-screen').classList.add('hidden');
+        document.getElementById('app-container').classList.remove('hidden');
+        checkAutoLogin();
+      }, 300);
+    }
+
+    // Load data from Google Apps Script Backend (Promises wrapper)
+    function loadDataFromGAS() {
+      showLoading(true);
+      Promise.all([
+        runGas('getStoreSettings'),
+        runGas('getInventory'),
+        runGas('getTransactions'),
+        runGas('getUsers')
+      ]).then(([settings, inventory, transactions, users]) => {
+        if (settings) state.storeSettings = settings;
+        state.products = inventory || [];
+        state.transactions = transactions || [];
+        state.users = users || [];
+        
+        applyStoreSettings();
+        showLoading(false);
+        document.getElementById('loading-screen').classList.add('opacity-0');
+        setTimeout(() => {
+          document.getElementById('loading-screen').classList.add('hidden');
+          document.getElementById('app-container').classList.remove('hidden');
+          checkAutoLogin();
+        }, 300);
+      }).catch(err => {
+        showLoading(false);
+        showToast('error', 'ไม่สามารถเชื่อมต่อฐานข้อมูล Google Sheets ได้: ' + err.toString());
+      });
+    }
+
+    // Promise wrapper for google.script.run
+    function runGas(methodName, ...args) {
+      return new Promise((resolve, reject) => {
+        if (typeof google === 'undefined' || !google.script || !google.script.run) {
+          reject("Not running in Apps Script environment");
+          return;
+        }
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(reject)[methodName](...args);
+      });
+    }
+
+    // Helper: Toast Notifications
+    function showToast(type, message) {
+      const container = document.getElementById('toast-container');
+      const toastId = 'toast_' + Date.now();
+      
+      const icons = {
+        success: '<i class="fa-solid fa-circle-check text-emerald-500"></i>',
+        error: '<i class="fa-solid fa-circle-exclamation text-rose-500"></i>',
+        warning: '<i class="fa-solid fa-triangle-exclamation text-amber-500"></i>'
+      };
+
+      const classes = 'p-4 rounded-2xl border bg-white/95 shadow-xl flex items-start gap-3 transition-all transform translate-x-12 animate-slide-in';
+      
+      const el = document.createElement('div');
+      el.id = toastId;
+      el.className = classes;
+      el.innerHTML = `
+        <div class="text-base">${icons[type] || ''}</div>
+        <div class="flex-1 text-xs font-semibold text-zinc-700">${message}</div>
+        <button onclick="document.getElementById('${toastId}').remove()" class="text-zinc-400 hover:text-zinc-600"><i class="fa-solid fa-xmark"></i></button>
+      `;
+      
+      container.appendChild(el);
+      setTimeout(() => {
+        if (document.getElementById(toastId)) {
+          document.getElementById(toastId).remove();
+        }
+      }, 4000);
+    }
+
+    function showLoading(val) {
+      const loader = document.getElementById('loading-screen');
+      if (val) {
+        loader.classList.remove('hidden', 'opacity-0');
+      } else {
+        loader.classList.add('opacity-0');
+        setTimeout(() => loader.classList.add('hidden'), 300);
+      }
+    }
+
+    // Store settings renderer
+    function applyStoreSettings() {
+      const logoUrl = state.storeSettings.storeLogo || "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=100";
+      const name = state.storeSettings.storeName || "ปากน้ำสโตร์ 2026";
+
+      document.getElementById('sidebar-logo').src = logoUrl;
+      document.getElementById('mobile-logo').src = logoUrl;
+      document.getElementById('login-logo').src = logoUrl;
+      document.getElementById('sidebar-store-name').innerText = name;
+      document.getElementById('mobile-store-name').innerText = name;
+      
+      // Settings Forms fields
+      document.getElementById('settings-storeName').value = name;
+      document.getElementById('settings-storePhone').value = state.storeSettings.storePhone;
+      document.getElementById('settings-storeLogo').value = logoUrl;
+      document.getElementById('settings-storeAddress').value = state.storeSettings.storeAddress;
+      
+      // Print elements
+      document.getElementById('print-store-title').innerText = name + " - รายงานสินค้าคงคลัง";
+      document.getElementById('print-print-address').innerText = "ที่อยู่ร้าน: " + state.storeSettings.storeAddress;
+    }
+
+    // Role-based Layout Switch
+    function renderAppForRole() {
+      const user = state.currentUser;
+      if (!user) {
+        document.getElementById('sidebar').classList.add('hidden');
+        document.getElementById('view-login').classList.remove('hidden');
+        hideAllTabs();
+        return;
+      }
+
+      document.getElementById('sidebar').classList.remove('hidden');
+      document.getElementById('view-login').classList.add('hidden');
+      
+      // Update User details in sidebar
+      document.getElementById('user-avatar').innerText = user.name.charAt(0);
+      document.getElementById('user-display-name').innerText = user.name;
+      document.getElementById('user-display-role').innerText = user.role === 'admin' ? 'ผู้ดูแลระบบ (ADMIN)' : 'พนักงาน (USER)';
+
+      // Hide or show Admin restricted tabs
+      if (user.role === 'admin') {
+        document.getElementById('menu-dashboard').classList.remove('hidden');
+        document.getElementById('menu-settings').classList.remove('hidden');
+        document.getElementById('btn-add-product').classList.remove('hidden');
+        switchTab('dashboard');
+      } else {
+        document.getElementById('menu-dashboard').classList.add('hidden');
+        document.getElementById('menu-settings').classList.add('hidden');
+        document.getElementById('btn-add-product').classList.add('hidden');
+        switchTab('inventory');
+      }
+    }
+
+    // Navigation and tab switching
+    function switchTab(tabName) {
+      hideAllTabs();
+      state.activeTab = tabName;
+      document.getElementById('tab-' + tabName).classList.remove('hidden');
+
+      // Highlight active navigation menu
+      const navMenus = ['dashboard', 'inventory', 'transactions', 'settings'];
+      navMenus.forEach(menu => {
+        const el = document.getElementById('menu-' + menu);
+        if (el) {
+          if (menu === tabName) {
+            el.className = "w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-black transition-all bg-sky-500 text-white shadow-md shadow-sky-500/20";
+          } else {
+            el.className = "w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition-all text-zinc-500 hover:bg-zinc-50";
+          }
+        }
+      });
+
+      // Render tab-specific details
+      if (tabName === 'dashboard') {
+        renderDashboard();
+      } else if (tabName === 'inventory') {
+        renderInventory();
+      } else if (tabName === 'transactions') {
+        renderTransactionsForm();
+        renderTxHistory();
+      } else if (tabName === 'settings') {
+        renderSettingsUsersList();
+      }
+      
+      // Close mobile drawer on navigation
+      document.getElementById('sidebar').classList.add('-translate-x-full');
+      document.getElementById('mobile-sidebar-backdrop').classList.add('hidden');
+    }
+
+    function hideAllTabs() {
+      const tabs = ['dashboard', 'inventory', 'transactions', 'settings'];
+      tabs.forEach(t => {
+        const el = document.getElementById('tab-' + t);
+        if (el) el.classList.add('hidden');
+      });
+    }
+
+    function toggleMobileSidebar() {
+      const sidebar = document.getElementById('sidebar');
+      const backdrop = document.getElementById('mobile-sidebar-backdrop');
+      if (sidebar.classList.contains('-translate-x-full')) {
+        sidebar.classList.remove('-translate-x-full');
+        backdrop.classList.remove('hidden');
+      } else {
+        sidebar.classList.add('-translate-x-full');
+        backdrop.classList.add('hidden');
+      }
+    }
+
+    // Auth System
+    function handleLoginSubmit(event) {
+      event.preventDefault();
+      const userVal = document.getElementById('login-username').value;
+      const passVal = document.getElementById('login-password').value;
+
+      showLoading(true);
+      const isGAS = typeof google !== 'undefined' && typeof google.script !== 'undefined';
+      
+      if (isGAS) {
+        runGas('authenticateUser', userVal, passVal)
+          .then(user => {
+            showLoading(false);
+            if (user) {
+              state.currentUser = user;
+              sessionStorage.setItem('current_user_session', JSON.stringify(user));
+              showToast('success', 'เข้าสู่ระบบสำเร็จ ยินดีต้อนรับ ' + user.name);
+              renderAppForRole();
+            } else {
+              showToast('error', 'ข้อมูลล็อกอินไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง');
+            }
+          })
+          .catch(err => {
+            showLoading(false);
+            showToast('error', 'ระบบล้มเหลว: ' + err.toString());
+          });
+      } else {
+        // Fallback for simulation
+        setTimeout(() => {
+          showLoading(false);
+          const users = JSON.parse(localStorage.getItem(LS_USERS) || '[]');
+          const matched = users.find(u => String(u.username).trim() === String(userVal).trim() && String(u.password).trim() === String(passVal).trim());
+          if (matched) {
+            state.currentUser = matched;
+            sessionStorage.setItem('current_user_session', JSON.stringify(matched));
+            showToast('success', 'เข้าสู่ระบบจำลองสำเร็จ');
+            renderAppForRole();
+          } else {
+            showToast('error', 'ชื่อผู้ใช้หรือรหัสผ่านจำลองผิดพลาด');
+          }
+        }, 500);
+      }
+    }
+
+    function checkAutoLogin() {
+      const session = sessionStorage.getItem('current_user_session');
+      if (session) {
+        state.currentUser = JSON.parse(session);
+        renderAppForRole();
+      } else {
+        renderAppForRole();
+      }
+    }
+
+    function handleLogout() {
+      state.currentUser = null;
+      sessionStorage.removeItem('current_user_session');
+      renderAppForRole();
+      showToast('success', 'ออกจากระบบเรียบร้อยแล้ว');
+    }
+
+    // Dark Mode Toggle
+    function toggleDarkMode() {
+      state.isDarkMode = !state.isDarkMode;
+      const html = document.documentElement;
+      const switchBg = document.getElementById('theme-switch-bg');
+      const switchThumb = document.getElementById('theme-switch-thumb');
+      
+      if (state.isDarkMode) {
+        html.classList.add('dark');
+        switchBg.className = "w-8 h-4.5 bg-sky-500 rounded-full p-0.5";
+        switchThumb.className = "w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-3.5";
+      } else {
+        html.classList.remove('dark');
+        switchBg.className = "w-8 h-4.5 bg-zinc-200 rounded-full p-0.5";
+        switchThumb.className = "w-3.5 h-3.5 bg-white rounded-full transition-transform translate-x-0";
+      }
+    }
+
+    // ==============================================
+    // RENDERING & INTERACTIVE DYNAMICS
+    // ==============================================
+
+    // 1. Dashboard View
+    function renderDashboard() {
+      const totalSkus = state.products.length;
+      document.getElementById('dash-sku-count').innerText = totalSkus;
+
+      const lowStock = state.products.filter(p => p.stock <= p.min).length;
+      document.getElementById('dash-low-stock').innerText = lowStock;
+      
+      const alertCard = document.getElementById('dash-alert-card');
+      const alertStatus = document.getElementById('dash-low-stock-status');
+      if (lowStock > 0) {
+        alertCard.className = "bg-rose-50/50 border border-rose-100 rounded-2xl p-5 flex items-center justify-between";
+        alertStatus.innerText = "⚠️ ต้องเพิ่มสต๊อกด่วน";
+      } else {
+        alertCard.className = "bg-white border rounded-2xl p-5 flex items-center justify-between";
+        alertStatus.innerText = "✅ คลังสินค้าปกติ";
+      }
+
+      const totalOut = state.transactions.filter(t => t.type === 'OUT').reduce((sum, t) => sum + Number(t.qty || 0), 0);
+      document.getElementById('dash-qty-out').innerText = totalOut;
+
+      const totalDefects = state.transactions.filter(t => t.type === 'DEFECT').reduce((sum, t) => sum + Number(t.qty || 0), 0);
+      document.getElementById('dash-qty-defect').innerText = totalDefects;
+
+      // Group stock by category for Custom Bar Charts
+      const categoriesMap = {};
+      state.products.forEach(p => {
+        if (!categoriesMap[p.category]) categoriesMap[p.category] = 0;
+        categoriesMap[p.category] += Number(p.stock || 0);
+      });
+
+      const catList = Object.keys(categoriesMap).map(name => ({ name, stock: categoriesMap[name] })).sort((a,b) => b.stock - a.stock);
+      const maxStock = Math.max(...catList.map(c => c.stock), 1);
+
+      const barContainer = document.getElementById('chart-categories');
+      if (catList.length === 0) {
+        barContainer.innerHTML = '<p class="text-center py-10 text-zinc-400 text-xs">ไม่มีข้อมูลสินค้าในระบบ</p>';
+      } else {
+        barContainer.innerHTML = catList.map(cat => {
+          const pct = Math.min((cat.stock / maxStock) * 100, 100);
+          return `
+            <div class="space-y-1">
+              <div class="flex justify-between items-center text-[11px] font-semibold">
+                <span class="text-zinc-600">${cat.name}</span>
+                <span class="text-zinc-500 font-mono">${cat.stock} ชิ้น</span>
+              </div>
+              <div class="h-3 w-full bg-zinc-50 dark:bg-zinc-800 rounded-full overflow-hidden p-0.5 border border-zinc-100 dark:border-zinc-800">
+                <div class="h-full rounded-full bg-gradient-to-r from-sky-400 to-indigo-500" style="width: ${pct}%"></div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // Proportions donut calculations
+      const txMap = { IN: 0, OUT: 0, RETURN: 0, DEFECT: 0 };
+      state.transactions.forEach(t => {
+        if (txMap[t.type] !== undefined) txMap[t.type] += Number(t.qty || 0);
+      });
+      const txTotal = txMap.IN + txMap.OUT + txMap.RETURN + txMap.DEFECT || 1;
+
+      const colors = { IN: 'bg-sky-400', OUT: 'bg-pink-400', RETURN: 'bg-emerald-400', DEFECT: 'bg-amber-400' };
+      const donutContainer = document.getElementById('chart-transactions');
+      
+      donutContainer.innerHTML = `
+        <div class="flex flex-wrap gap-2 w-full justify-center">
+          ${Object.keys(txMap).map(type => {
+            const qty = txMap[type];
+            const percent = Math.round((qty / txTotal) * 100);
+            return `
+              <div class="flex items-center gap-2 p-2 rounded-xl bg-zinc-50 border border-zinc-100 min-w-[100px] text-xs">
+                <span class="w-3 h-3 rounded-full shrink-0 ${colors[type]}"></span>
+                <div>
+                  <p class="text-[9px] text-zinc-400 font-bold uppercase">${type}</p>
+                  <p class="font-extrabold text-zinc-700">${qty} ชิ้น <span class="font-normal text-[10px] text-zinc-400">(${percent}%)</span></p>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    // 2. Inventory Render Grouped by Category
+    function renderInventory() {
+      const search = document.getElementById('inventory-search').value.toLowerCase();
+      
+      // Extract unique categories for filter tabs
+      const uniqueCats = new Set(state.products.map(p => p.category));
+      const catsList = ['ทั้งหมด', ...Array.from(uniqueCats)];
+      
+      const tabContainer = document.getElementById('inventory-categories-tabs');
+      tabContainer.innerHTML = catsList.map(cat => {
+        const isSel = state.inventorySelectedCategory === cat;
+        return `
+          <button onclick="setInventoryCategoryFilter('${cat}')" class="px-3.5 py-1.5 rounded-full text-[10px] font-extrabold shrink-0 transition-all ${
+            isSel ? 'bg-sky-500 text-white shadow-md shadow-sky-500/10' : 'bg-zinc-50 text-zinc-500 border hover:bg-zinc-100'
+          }">${cat}</button>
+        `;
+      }).join('');
+
+      // Filter and Group
+      const filtered = state.products.filter(p => {
+        const matchesSearch = p.code.toLowerCase().includes(search) || p.name.toLowerCase().includes(search) || p.category.toLowerCase().includes(search);
+        const matchesCat = state.inventorySelectedCategory === 'ทั้งหมด' || p.category === state.inventorySelectedCategory;
+        return matchesSearch && matchesCat;
+      });
+
+      const grouped = {};
+      filtered.forEach(p => {
+        if (!grouped[p.category]) grouped[p.category] = [];
+        grouped[p.category].push(p);
+      });
+
+      const container = document.getElementById('inventory-grouped-container');
+      if (filtered.length === 0) {
+        container.innerHTML = '<p class="text-center py-12 text-zinc-400 text-xs">ไม่พบรายการสต๊อกสินค้าตามการค้นหา</p>';
+        return;
+      }
+
+      container.innerHTML = Object.keys(grouped).map(catName => `
+        <div class="bg-white border rounded-3xl p-5 shadow-sm space-y-4">
+          <div class="flex justify-between items-center border-b pb-2">
+            <h3 class="text-xs font-black text-zinc-700 flex items-center gap-1.5 uppercase tracking-wide">
+              <span class="w-2.5 h-2.5 rounded-full bg-gradient-to-tr from-sky-400 to-pink-400"></span>
+              ${catName}
+            </h3>
+            <span class="text-[10px] font-bold text-zinc-400 bg-zinc-50 border px-2 py-0.5 rounded-full">${grouped[catName].length} รายการ</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead>
+                <tr class="border-b text-zinc-400 uppercase font-bold tracking-wider">
+                  <th class="py-2 px-3">รูปถ่าย</th>
+                  <th class="py-2 px-3">รหัสสินค้า</th>
+                  <th class="py-2 px-3">ชื่อสินค้า</th>
+                  <th class="py-2 px-3 text-center">คงเหลือ (สต๊อก)</th>
+                  <th class="py-2 px-3 text-center">จุดเตือนภัย (Min)</th>
+                  <th class="py-2 px-3 text-center no-print">สถานะ</th>
+                  <th class="py-2 px-3 text-right admin-element no-print">การจัดการ</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y text-zinc-700 font-medium">
+                ${grouped[catName].map(prod => {
+                  const isLow = prod.stock <= prod.min;
+                  const canEdit = state.currentUser?.role === 'admin';
+                  return `
+                    <tr class="hover:bg-zinc-50/40">
+                      <td class="py-2.5 px-3">
+                        <img src="${prod.imageUrl || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=100'}" alt="product" class="w-10 h-10 rounded-xl object-cover border" onerror="this.src='https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=100'">
+                      </td>
+                      <td class="py-2.5 px-3 font-mono font-bold text-zinc-500">${prod.code}</td>
+                      <td class="py-2.5 px-3">
+                        <p class="font-bold text-zinc-800">${prod.name}</p>
+                        <span class="text-[9px] text-zinc-400">${prod.category}</span>
+                      </td>
+                      <td class="py-2.5 px-3 text-center font-black text-zinc-800 text-sm">${prod.stock}</td>
+                      <td class="py-2.5 px-3 text-center font-bold text-zinc-500">${prod.min}</td>
+                      <td class="py-2.5 px-3 text-center no-print">
+                        ${isLow ? '<span class="px-2 py-0.5 rounded-full bg-rose-50 text-rose-500 font-bold text-[9px]">⚠️ สต๊อกวิกฤต</span>' : '<span class="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-500 font-bold text-[9px]">✅ สต๊อกปกติ</span>'}
+                      </td>
+                      <td class="py-2.5 px-3 text-right no-print ${canEdit ? '' : 'hidden'}">
+                        <div class="flex justify-end gap-0.5">
+                          <button onclick="openProductFormModal('${prod.id}')" class="p-1.5 text-sky-500 hover:bg-sky-50 rounded-lg"><i class="fa-solid fa-pen"></i></button>
+                          <button onclick="openDeleteProductModal('${prod.id}')" class="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function setInventoryCategoryFilter(cat) {
+      state.inventorySelectedCategory = cat;
+      renderInventory();
+    }
+
+    // 3. Transactions views
+    function renderTransactionsForm() {
+      const select = document.getElementById('tx-productId');
+      select.innerHTML = '<option value="">-- กรุณาเลือกสินค้า --</option>' + state.products.map(p => `
+        <option value="${p.id}">${p.code} - ${p.name} (คงเหลือ: ${p.stock} ชิ้น)</option>
+      `).join('');
+      
+      handleTxProductChange();
+    }
+
+    function handleTxProductChange() {
+      const prodId = document.getElementById('tx-productId').value;
+      const card = document.getElementById('tx-product-detail-card');
+      const prod = state.products.find(p => p.id === prodId);
+
+      if (!prod) {
+        card.innerHTML = '<div class="text-zinc-400 text-xs text-center py-10">กรุณาเลือกรายการสินค้าจากช่องค้นหาทางซ้าย เพื่อดูสถานะก่อนยืนยัน</div>';
+        return;
+      }
+
+      const isLow = prod.stock <= prod.min;
+      card.innerHTML = `
+        <div class="space-y-4 text-center animate-fade-in">
+          <img src="${prod.imageUrl || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=200'}" alt="Preview" class="w-20 h-20 rounded-2xl object-cover border mx-auto" onerror="this.src='https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=200'">
+          <div>
+            <p class="text-[9px] font-mono font-bold text-zinc-400 uppercase tracking-wider">${prod.code}</p>
+            <h4 class="font-extrabold text-zinc-800 text-xs">${prod.name}</h4>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-center text-xs">
+            <div class="bg-white p-2 rounded-xl border">
+              <p class="text-[8px] text-zinc-400">คงคลังตอนนี้</p>
+              <p class="font-black text-zinc-800">${prod.stock} ชิ้น</p>
+            </div>
+            <div class="bg-white p-2 rounded-xl border">
+              <p class="text-[8px] text-zinc-400">จุดแจ้งเตือน</p>
+              <p class="font-bold text-zinc-400">${prod.min} ชิ้น</p>
+            </div>
+          </div>
+          ${isLow ? '<div class="p-2.5 bg-rose-50 text-rose-500 font-semibold text-[10px] rounded-xl flex items-center justify-center gap-1"><i class="fa-solid fa-triangle-exclamation"></i> สต๊อกต่ำกว่าขีดความปลอดภัย ควรนำเข้าสต๊อกด่วน</div>' : ''}
+        </div>
+      `;
+    }
+
+    function setTxType(type) {
+      state.selectedTxType = type;
+      ['IN', 'OUT', 'RETURN', 'DEFECT'].forEach(t => {
+        const el = document.getElementById('tx-type-' + t);
+        if (t === type) {
+          el.className = `py-3 border-2 text-xs font-bold rounded-xl flex flex-col items-center gap-1 shadow-sm ` + {
+            IN: 'border-sky-500 bg-sky-50 text-sky-500',
+            OUT: 'border-pink-500 bg-pink-50 text-pink-500',
+            RETURN: 'border-emerald-500 bg-emerald-50 text-emerald-500',
+            DEFECT: 'border-amber-500 bg-amber-50 text-amber-500'
+          }[t];
+        } else {
+          el.className = "py-3 border border-zinc-100 bg-zinc-50 text-zinc-500 font-bold text-xs rounded-xl flex flex-col items-center gap-1";
+        }
+      });
+
+      // Extra fields dynamic render
+      document.getElementById('tx-return-extra').style.display = type === 'RETURN' ? 'block' : 'none';
+      document.getElementById('tx-defect-extra').style.display = type === 'DEFECT' ? 'block' : 'none';
+    }
+
+    // Switch Transaction Inner tabs
+    function switchTxSubTab(tabName) {
+      state.txSubTab = tabName;
+      const cBtn = document.getElementById('btn-tx-sub-create');
+      const hBtn = document.getElementById('btn-tx-sub-history');
+      const cPanel = document.getElementById('tx-sub-create-panel');
+      const hPanel = document.getElementById('tx-sub-history-panel');
+
+      if (tabName === 'create') {
+        cBtn.className = "px-4 py-2 rounded-lg text-xs font-bold bg-white text-sky-500 shadow-sm transition-all";
+        hBtn.className = "px-4 py-2 rounded-lg text-xs font-bold text-zinc-500 transition-all";
+        cPanel.classList.remove('hidden');
+        hPanel.classList.add('hidden');
+      } else {
+        hBtn.className = "px-4 py-2 rounded-lg text-xs font-bold bg-white text-sky-500 shadow-sm transition-all";
+        cBtn.className = "px-4 py-2 rounded-lg text-xs font-bold text-zinc-500 transition-all";
+        cPanel.classList.add('hidden');
+        hPanel.classList.remove('hidden');
+        renderTxHistory();
+      }
+    }
+
+    // Historical list logs
+    function renderTxHistory() {
+      const query = document.getElementById('tx-search-history').value.toLowerCase();
+      
+      const filtered = state.transactions.filter(t => {
+        const prod = state.products.find(p => p.id === t.productId);
+        const name = prod ? prod.name : '';
+        const matchesSearch = name.toLowerCase().includes(query) || t.note.toLowerCase().includes(query) || t.user.toLowerCase().includes(query);
+        const matchesFilter = state.txFilterType === 'ทั้งหมด' || t.type === state.txFilterType;
+        return matchesSearch && matchesFilter;
+      }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      // Update Filter tabs style
+      ['ทั้งหมด', 'IN', 'OUT', 'RETURN', 'DEFECT'].forEach(type => {
+        const el = document.getElementById('tx-filter-tab-' + type);
+        if (state.txFilterType === type) {
+          el.className = "px-3 py-1.5 rounded-full text-xs font-bold bg-sky-500 text-white shadow-sm shrink-0";
+        } else {
+          el.className = "px-3 py-1.5 rounded-full text-xs font-bold text-zinc-500 hover:bg-zinc-50 shrink-0";
+        }
+      });
+
+      const listContainer = document.getElementById('tx-history-log-list');
+      if (filtered.length === 0) {
+        listContainer.innerHTML = '<p class="text-center py-10 text-zinc-400 text-xs bg-white border rounded-2xl">ไม่พบประวัติรายการตามเงื่อนไข</p>';
+        return;
+      }
+
+      const styles = {
+        IN: 'text-sky-500 bg-sky-50 border-sky-100',
+        OUT: 'text-pink-500 bg-pink-50 border-pink-100',
+        RETURN: 'text-emerald-500 bg-emerald-50 border-emerald-100',
+        DEFECT: 'text-amber-500 bg-amber-50 border-amber-100'
+      };
+
+      const icons = {
+        IN: '<i class="fa-solid fa-circle-down"></i>',
+        OUT: '<i class="fa-solid fa-circle-up"></i>',
+        RETURN: '<i class="fa-solid fa-rotate-left"></i>',
+        DEFECT: '<i class="fa-solid fa-triangle-exclamation"></i>'
+      };
+
+      listContainer.innerHTML = filtered.map(tx => {
+        const prod = state.products.find(p => p.id === tx.productId);
+        return `
+          <div class="bg-white border p-4 rounded-2xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div class="flex items-start gap-3">
+              <div class="w-9 h-9 rounded-xl border flex items-center justify-center text-md shrink-0 ${styles[tx.type]}">
+                ${icons[tx.type]}
+              </div>
+              <div class="space-y-1">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="px-2 py-0.5 text-[8px] font-bold uppercase rounded-full border ${styles[tx.type]}">${tx.type}</span>
+                  <span class="text-[9px] text-zinc-400 font-mono">ID: ${tx.id}</span>
+                </div>
+                <p class="text-xs font-bold text-zinc-800">${prod ? prod.name : 'สินค้าถูกลบออกจากคลัง'} <span class="text-[10px] font-mono text-zinc-400">(${prod ? prod.code : 'N/A'})</span></p>
+                <div class="flex gap-x-4 flex-wrap text-[10px] text-zinc-400 font-semibold">
+                  <span><i class="fa-solid fa-calendar-days"></i> ${tx.date}</span>
+                  <span><i class="fa-solid fa-user"></i> บันทึกโดย: ${tx.user}</span>
+                </div>
+                ${tx.note ? `<p class="text-[10px] bg-zinc-50 border p-2 rounded-xl text-zinc-500 max-w-md mt-1"><strong>หมายเหตุ:</strong> ${tx.note}</p>` : ''}
+                ${tx.type === 'DEFECT' && tx.defectType ? `<p class="text-[10px] font-bold text-amber-500 mt-1">⚠️ อาการชำรุด: ${tx.defectType}</p>` : ''}
+                ${tx.type === 'RETURN' && tx.condition ? `<p class="text-[10px] font-bold text-emerald-500 mt-1">♻️ สภาพรับคืน: ${tx.condition}</p>` : ''}
+              </div>
+            </div>
+
+            <!-- Right display quantity and attachment -->
+            <div class="flex items-center justify-between sm:justify-end gap-4 pt-3 sm:pt-0 border-t sm:border-none">
+              ${tx.imageUrl ? `<img src="${tx.imageUrl}" alt="evidence" class="w-10 h-10 rounded-lg object-cover border" onerror="this.style.display='none'">` : ''}
+              <div class="text-right">
+                <p class="text-[9px] text-zinc-400 font-bold uppercase">จำนวนทำรายการ</p>
+                <p class="text-base font-black text-zinc-800">${tx.type === 'OUT' || tx.type === 'DEFECT' ? '-' : '+'}${tx.qty} ชิ้น</p>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function setTxFilterType(type) {
+      state.txFilterType = type;
+      renderTxHistory();
+    }
+
+    // 4. Users table settings
+    function renderSettingsUsersList() {
+      const container = document.getElementById('settings-users-list');
+      container.innerHTML = state.users.map(u => {
+        const isProtected = u.username === 'admin';
+        return `
+          <tr class="hover:bg-zinc-50/50">
+            <td class="py-2.5 px-3 font-bold text-zinc-800">${u.name}</td>
+            <td class="py-2.5 px-3 font-mono text-zinc-500">${u.username}</td>
+            <td class="py-2.5 px-3 font-mono text-zinc-400">••••••••</td>
+            <td class="py-2.5 px-3 text-center">
+              <span class="px-2 py-0.5 rounded-full text-[9px] font-bold ${u.role === 'admin' ? 'bg-rose-50 text-rose-500 border border-rose-100' : 'bg-sky-50 text-sky-500 border border-sky-100'}">${u.role.toUpperCase()}</span>
+            </td>
+            <td class="py-2.5 px-3 text-right">
+              <div class="flex justify-end gap-1">
+                <button onclick="openUserFormModal('${u.id}')" class="p-1 text-sky-500 hover:bg-sky-50 rounded"><i class="fa-solid fa-pen"></i></button>
+                <button onclick="openDeleteUserModal('${u.id}')" ${isProtected ? 'disabled' : ''} class="p-1 text-rose-500 hover:bg-rose-50 rounded disabled:opacity-30"><i class="fa-solid fa-trash"></i></button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // ==============================================
+    // CORE SUBMISSION AND MODAL ENGINE
+    // ==============================================
+
+    // Product Modal Actions
+    function openProductFormModal(productId = '') {
+      const modal = document.getElementById('modal-product');
+      const title = document.getElementById('product-modal-title');
+      const stockContainer = document.getElementById('prod-stock-container');
+      
+      // Clear forms
+      document.getElementById('prod-id').value = '';
+      document.getElementById('prod-code').value = '';
+      document.getElementById('prod-name').value = '';
+      document.getElementById('prod-category').value = '';
+      document.getElementById('prod-min').value = '10';
+      document.getElementById('prod-stock').value = '0';
+      state.tempProductImageBase64 = '';
+      document.getElementById('prod-img-preview-container').innerHTML = '<i class="fa-solid fa-image text-zinc-300 text-xl"></i>';
+
+      if (productId) {
+        title.innerText = "✍️ แก้ไขรายละเอียดข้อมูลสินค้า";
+        stockContainer.classList.add('hidden'); // Stock changes should only occur via Transactions
+        const prod = state.products.find(p => p.id === productId);
+        if (prod) {
+          document.getElementById('prod-id').value = prod.id;
+          document.getElementById('prod-code').value = prod.code;
+          document.getElementById('prod-name').value = prod.name;
+          document.getElementById('prod-category').value = prod.category;
+          document.getElementById('prod-min').value = prod.min;
+          
+          if (prod.imageUrl) {
+            document.getElementById('prod-img-preview-container').innerHTML = `<img src="${prod.imageUrl}" class="w-full h-full object-cover">`;
+          }
+        }
+      } else {
+        title.innerText = "📦 เพิ่มสินค้าใหม่ในคลังสต๊อก";
+        stockContainer.classList.remove('hidden');
+      }
+
+      modal.classList.remove('hidden');
+    }
+
+    function closeProductFormModal() {
+      document.getElementById('modal-product').classList.add('hidden');
+    }
+
+    // Image Compressor helpers on GAS Frontend
+    function triggerProductImageUpload() {
+      document.getElementById('prod-file-input').click();
+    }
+
+    function handleProductFileChange(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          
+          // Force compression
+          const MAX_WIDTH = 600;
+          if (width > MAX_WIDTH) {
+            height = Math.round((height * MAX_WIDTH) / width);
+            width = MAX_WIDTH;
+          }
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          const base64 = canvas.toDataURL('image/jpeg', 0.75);
+          
+          state.tempProductImageBase64 = base64;
+          document.getElementById('prod-img-preview-container').innerHTML = `<img src="${base64}" class="w-full h-full object-cover">`;
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // Submit product
+    function handleProductSubmit(e) {
+      e.preventDefault();
+      const id = document.getElementById('prod-id').value;
+      const code = document.getElementById('prod-code').value;
+      const name = document.getElementById('prod-name').value;
+      const category = document.getElementById('prod-category').value;
+      const min = Number(document.getElementById('prod-min').value);
+      const stock = Number(document.getElementById('prod-stock').value || 0);
+
+      const payload = {
+        id, code, name, category, min, stock,
+        imageUrl: id ? (state.products.find(p => p.id === id)?.imageUrl || '') : '',
+        imageBase64: state.tempProductImageBase64 || ''
+      };
+
+      showLoading(true);
+      const isGAS = typeof google !== 'undefined' && typeof google.script !== 'undefined';
+
+      if (isGAS) {
+        runGas('saveProduct', payload)
+          .then(res => {
+            showLoading(false);
+            if (res.success) {
+              showToast('success', res.message);
+              if (res.warning) showToast('warning', res.warning);
+              closeProductFormModal();
+              loadDataFromGAS(); // reload
+            } else {
+              showToast('error', res.message);
+            }
+          })
+          .catch(err => {
+            showLoading(false);
+            showToast('error', 'ข้อผิดพลาด: ' + err.toString());
+          });
+      } else {
+        // Fallback simulator
+        setTimeout(() => {
+          showLoading(false);
+          const list = JSON.parse(localStorage.getItem(LS_PRODUCTS) || '[]');
+          if (id) {
+            const idx = list.findIndex(p => p.id === id);
+            if (idx !== -1) {
+              list[idx] = { ...list[idx], code, name, category, min };
+              if (state.tempProductImageBase64) list[idx].imageUrl = state.tempProductImageBase64;
+            }
+          } else {
+            if (list.some(p => p.code === code)) {
+              showToast('error', 'รหัสสินค้าซ้ำในระบบคลัง');
+              return;
+            }
+            list.push({
+              id: 'P' + Date.now().toString().slice(-4),
+              code, name, category, min, stock,
+              imageUrl: state.tempProductImageBase64 || ''
+            });
+          }
+          localStorage.setItem(LS_PRODUCTS, JSON.stringify(list));
+          showToast('success', 'บันทึกรายการสินค้าจำลองสำเร็จ');
+          closeProductFormModal();
+          loadDataFromLocal();
+        }, 600);
+      }
+    }
+
+    // Delete Product Modal
+    let targetDeleteProductId = '';
+    function openDeleteProductModal(id) {
+      targetDeleteProductId = id;
+      document.getElementById('modal-delete-product').classList.remove('hidden');
+    }
+    function closeDeleteProductModal() {
+      document.getElementById('modal-delete-product').classList.add('hidden');
+    }
+    
+    document.getElementById('btn-confirm-delete-prod').onclick = function() {
+      if (!targetDeleteProductId) return;
+      showLoading(true);
+      const isGAS = typeof google !== 'undefined' && typeof google.script !== 'undefined';
+      
+      if (isGAS) {
+        runGas('deleteProduct', targetDeleteProductId)
+          .then(res => {
+            showLoading(false);
+            if (res.success) {
+              showToast('success', res.message);
+              closeDeleteProductModal();
+              loadDataFromGAS();
+            } else {
+              showToast('error', res.message);
+            }
+          })
+          .catch(err => {
+            showLoading(false);
+            showToast('error', err.toString());
+          });
+      } else {
+        // local
+        setTimeout(() => {
+          showLoading(false);
+          const list = JSON.parse(localStorage.getItem(LS_PRODUCTS) || '[]');
+          const filtered = list.filter(p => p.id !== targetDeleteProductId);
+          localStorage.setItem(LS_PRODUCTS, JSON.stringify(filtered));
+          showToast('success', 'ลบสินค้าจำลองสำเร็จ');
+          closeDeleteProductModal();
+          loadDataFromLocal();
+        }, 300);
+      }
+    };
+
+    // User Form Modal Actions
+    function openUserFormModal(userId = '') {
+      document.getElementById('user-id').value = '';
+      document.getElementById('user-name').value = '';
+      document.getElementById('user-username').value = '';
+      document.getElementById('user-password').value = '';
+      document.getElementById('user-role').value = 'user';
+      document.getElementById('user-modal-title').innerText = "เพิ่มพนักงานใหม่";
+
+      if (userId) {
+        document.getElementById('user-modal-title').innerText = "✍️ แก้ไขพนักงาน";
+        const user = state.users.find(u => u.id === userId);
+        if (user) {
+          document.getElementById('user-id').value = user.id;
+          document.getElementById('user-name').value = user.name;
+          document.getElementById('user-username').value = user.username;
+          document.getElementById('user-password').value = user.password || '';
+          document.getElementById('user-role').value = user.role;
+        }
+      }
+      document.getElementById('modal-user').classList.remove('hidden');
+    }
+
+    function closeUserFormModal() {
+      document.getElementById('modal-user').classList.add('hidden');
+    }
+
+    function handleUserSubmit(e) {
+      e.preventDefault();
+      const id = document.getElementById('user-id').value;
+      const name = document.getElementById('user-name').value;
+      const username = document.getElementById('user-username').value;
+      const password = document.getElementById('user-password').value;
+      const role = document.getElementById('user-role').value;
+
+      const payload = { id, name, username, password, role };
+      showLoading(true);
+      const isGAS = typeof google !== 'undefined' && typeof google.script !== 'undefined';
+
+      if (isGAS) {
+        runGas('saveUser', payload)
+          .then(res => {
+            showLoading(false);
+            if (res.success) {
+              showToast('success', res.message);
+              closeUserFormModal();
+              loadDataFromGAS();
+            } else {
+              showToast('error', res.message);
+            }
+          })
+          .catch(err => {
+            showLoading(false);
+            showToast('error', err.toString());
+          });
+      } else {
+        // local
+        setTimeout(() => {
+          showLoading(false);
+          const list = JSON.parse(localStorage.getItem(LS_USERS) || '[]');
+          if (id) {
+            const idx = list.findIndex(u => u.id === id);
+            if (idx !== -1) list[idx] = payload;
+          } else {
+            payload.id = 'U' + Date.now().toString().slice(-4);
+            list.push(payload);
+          }
+          localStorage.setItem(LS_USERS, JSON.stringify(list));
+          showToast('success', 'บันทึกพนักงานจำลองเรียบร้อย');
+          closeUserFormModal();
+          loadDataFromLocal();
+        }, 400);
+      }
+    }
+
+    // Delete user
+    let targetDeleteUserId = '';
+    function openDeleteUserModal(id) {
+      targetDeleteUserId = id;
+      document.getElementById('modal-delete-user').classList.remove('hidden');
+    }
+    function closeDeleteUserModal() {
+      document.getElementById('modal-delete-user').classList.add('hidden');
+    }
+    document.getElementById('btn-confirm-delete-user').onclick = function() {
+      if (!targetDeleteUserId) return;
+      showLoading(true);
+      const isGAS = typeof google !== 'undefined' && typeof google.script !== 'undefined';
+
+      if (isGAS) {
+        runGas('deleteUser', targetDeleteUserId)
+          .then(res => {
+            showLoading(false);
+            if (res.success) {
+              showToast('success', res.message);
+              closeDeleteUserModal();
+              loadDataFromGAS();
+            } else {
+              showToast('error', res.message);
+            }
+          })
+          .catch(err => {
+            showLoading(false);
+            showToast('error', err.toString());
+          });
+      } else {
+        setTimeout(() => {
+          showLoading(false);
+          const list = JSON.parse(localStorage.getItem(LS_USERS) || '[]');
+          const filtered = list.filter(u => u.id !== targetDeleteUserId);
+          localStorage.setItem(LS_USERS, JSON.stringify(filtered));
+          showToast('success', 'ลบผู้ใช้งานจำลองสำเร็จ');
+          closeDeleteUserModal();
+          loadDataFromLocal();
+        }, 300);
+      }
+    };
+
+    // Store Settings Submission
+    function handleStoreSettingsSubmit(e) {
+      e.preventDefault();
+      const storeName = document.getElementById('settings-storeName').value;
+      const storePhone = document.getElementById('settings-storePhone').value;
+      const storeLogo = document.getElementById('settings-storeLogo').value;
+      const storeAddress = document.getElementById('settings-storeAddress').value;
+
+      const payload = { storeName, storePhone, storeLogo, storeAddress };
+      showLoading(true);
+      const isGAS = typeof google !== 'undefined' && typeof google.script !== 'undefined';
+
+      if (isGAS) {
+        runGas('saveStoreSettings', payload)
+          .then(res => {
+            showLoading(false);
+            if (res.success) {
+              showToast('success', res.message);
+              loadDataFromGAS();
+            } else {
+              showToast('error', res.message);
+            }
+          })
+          .catch(err => {
+            showLoading(false);
+            showToast('error', err.toString());
+          });
+      } else {
+        setTimeout(() => {
+          showLoading(false);
+          localStorage.setItem(LS_SETTINGS, JSON.stringify(payload));
+          showToast('success', 'บันทึกตั้งค่าสโตร์จำลองแล้ว');
+          loadDataFromLocal();
+        }, 300);
+      }
+    }
+
+    // Google API connectivity buttons
+    function handleForceAuthorize() {
+      showLoading(true);
+      const isGAS = typeof google !== 'undefined' && typeof google.script !== 'undefined';
+      if (isGAS) {
+        runGas('forceAuthorize')
+          .then(res => {
+            showLoading(false);
+            showToast(res.success ? 'success' : 'error', res.message);
+          })
+          .catch(err => {
+            showLoading(false);
+            showToast('error', err.toString());
+          });
+      } else {
+        setTimeout(() => {
+          showLoading(false);
+          showToast('success', 'จำลองการตรวจสอบสิทธิ์และอนุญาตให้เข้าใช้งานไฟล์ Drive สำเร็จ!');
+        }, 400);
+      }
+    }
+
+    function handleSetupDatabase() {
+      showLoading(true);
+      const isGAS = typeof google !== 'undefined' && typeof google.script !== 'undefined';
+      if (isGAS) {
+        runGas('setupDatabase')
+          .then(res => {
+            showLoading(false);
+            showToast('success', res.message);
+            loadDataFromGAS();
+          })
+          .catch(err => {
+            showLoading(false);
+            showToast('error', err.toString());
+          });
+      } else {
+        setTimeout(() => {
+          showLoading(false);
+          localStorage.removeItem(LS_PRODUCTS);
+          localStorage.removeItem(LS_USERS);
+          localStorage.removeItem(LS_SETTINGS);
+          localStorage.removeItem(LS_TRANSACTIONS);
+          setupLocalMockData();
+          showToast('success', 'ล้างแคชและเริ่มจำลองข้อมูลเริ่มต้นให้ใหม่ใน Sandbox');
+          loadDataFromLocal();
+        }, 500);
+      }
+    }
+
+    // Transactions Engine Submission
+    function triggerTxImageUpload() {
+      document.getElementById('tx-file-input').click();
+    }
+
+    function handleTxFileChange(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const status = document.getElementById('tx-file-status');
+      status.innerText = "กำลังประมวลผล...";
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          
+          const MAX_WIDTH = 600;
+          if (width > MAX_WIDTH) {
+            height = Math.round((height * MAX_WIDTH) / width);
+            width = MAX_WIDTH;
+          }
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          const base64 = canvas.toDataURL('image/jpeg', 0.75);
+          
+          state.tempTxImageBase64 = base64;
+          status.innerText = "✓ เลือกภาพชำรุดสำเร็จ";
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function handleTxSubmit(e) {
+      e.preventDefault();
+      const productId = document.getElementById('tx-productId').value;
+      const qty = Number(document.getElementById('tx-qty').value);
+      const note = document.getElementById('tx-note').value;
+      const type = state.selectedTxType;
+
+      const conditionEl = document.querySelector('input[name="tx-condition"]:checked');
+      const condition = conditionEl ? conditionEl.value : '';
+      const defectType = document.getElementById('tx-defectType').value;
+
+      // Local Validation before hitting back-end
+      const prod = state.products.find(p => p.id === productId);
+      if ((type === 'OUT' || type === 'DEFECT') && prod && prod.stock < qty) {
+        showToast('error', `ยอดสินค้าในคลังมีไม่เพียงพอ (คงเหลือ ${prod.stock} ชิ้น)`);
+        return;
+      }
+
+      const payload = {
+        productId, qty, note, type,
+        condition: type === 'RETURN' ? condition : undefined,
+        defectType: type === 'DEFECT' ? defectType : undefined,
+        user: state.currentUser?.name || 'System',
+        imageBase64: state.tempTxImageBase64 || ''
+      };
+
+      showLoading(true);
+      const isGAS = typeof google !== 'undefined' && typeof google.script !== 'undefined';
+
+      if (isGAS) {
+        runGas('createTransaction', payload)
+          .then(res => {
+            showLoading(false);
+            if (res.success) {
+              showToast('success', res.message);
+              if (res.warning) showToast('warning', res.warning);
+              
+              // Clear inputs
+              document.getElementById('tx-qty').value = '';
+              document.getElementById('tx-note').value = '';
+              state.tempTxImageBase64 = '';
+              document.getElementById('tx-file-status').innerText = 'ไม่ได้แนบรูป';
+              
+              loadDataFromGAS();
+              switchTxSubTab('history');
+            } else {
+              showToast('error', res.message);
+            }
+          })
+          .catch(err => {
+            showLoading(false);
+            showToast('error', err.toString());
+          });
+      } else {
+        // local
+        setTimeout(() => {
+          showLoading(false);
+          const pList = JSON.parse(localStorage.getItem(LS_PRODUCTS) || '[]');
+          const tList = JSON.parse(localStorage.getItem(LS_TRANSACTIONS) || '[]');
+          
+          const pIdx = pList.findIndex(p => p.id === productId);
+          if (pIdx !== -1) {
+            let updated = pList[pIdx].stock;
+            if (type === 'IN') {
+              updated += qty;
+            } else if (type === 'OUT' || type === 'DEFECT') {
+              updated -= qty;
+            } else if (type === 'RETURN') {
+              if (condition === 'สมบูรณ์') updated += qty;
+            }
+            pList[pIdx].stock = updated;
+          }
+
+          tList.push({
+            id: 'TX' + Date.now().toString().slice(-4),
+            type, productId, qty, note,
+            user: state.currentUser?.name || 'System',
+            date: new Date().toISOString().replace('T',' ').slice(0, 19),
+            condition: type === 'RETURN' ? condition : undefined,
+            defectType: type === 'DEFECT' ? defectType : undefined,
+            imageUrl: state.tempTxImageBase64 || ''
+          });
+
+          localStorage.setItem(LS_PRODUCTS, JSON.stringify(pList));
+          localStorage.setItem(LS_TRANSACTIONS, JSON.stringify(tList));
+          
+          showToast('success', 'บันทึกประวัติจำลองและปรับปรุงยอดคลังสำเร็จ');
+          
+          // Clear
+          document.getElementById('tx-qty').value = '';
+          document.getElementById('tx-note').value = '';
+          state.tempTxImageBase64 = '';
+          document.getElementById('tx-file-status').innerText = 'ไม่ได้แนบรูป';
+
+          loadDataFromLocal();
+          switchTxSubTab('history');
+        }, 600);
+      }
+    }
+  </script>
+</body>
+</html>
