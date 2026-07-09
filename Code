@@ -1,0 +1,462 @@
+/**
+ * Paknam Inventory System 2026 - Google Apps Script Backend (Code.gs)
+ * Developed with high-fidelity CRUD, Role-based auth, and Fault-tolerant Drive uploads.
+ */
+
+function doGet(e) {
+  var template = HtmlService.createTemplateFromFile('Index');
+  var output = template.evaluate();
+  output.setTitle("ระบบบริหารจัดการสินค้าในคลัง (Paknam Inventory 2026)")
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1.0')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  return output;
+}
+
+function forceAuthorize() {
+  try {
+    var root = DriveApp.getRootFolder();
+    var name = root.getName();
+    var activeSS = SpreadsheetApp.getActiveSpreadsheet();
+    Logger.log("Authorized successfully. Root folder: " + name + ", Sheet ID: " + activeSS.getId());
+    return { success: true, message: "เชื่อมโยงสิทธิ์การใช้งานสำเร็จแล้ว!" };
+  } catch (error) {
+    Logger.log("Auth error: " + error.toString());
+    return { success: false, message: "เกิดข้อผิดพลาดในการขอสิทธิ์: " + error.toString() };
+  }
+}
+
+function setupDatabase() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  var sheetsDef = {
+    "Products": ["id", "code", "name", "category", "stock", "min", "imageUrl"],
+    "Transactions": ["id", "type", "productId", "qty", "date", "note", "user", "status", "defectType", "condition", "imageUrl"],
+    "Users": ["id", "username", "password", "name", "role"],
+    "Settings": ["key", "value"]
+  };
+  
+  var createdSheets = [];
+  
+  for (var sheetName in sheetsDef) {
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) {
+      sheet = ss.insertSheet(sheetName);
+      sheet.appendRow(sheetsDef[sheetName]);
+      sheet.getRange(1, 1, 1, sheetsDef[sheetName].length)
+           .setFontWeight("bold")
+           .setBackground("#4facfe")
+           .setFontColor("#ffffff");
+      createdSheets.push(sheetName);
+      
+      if (sheetName === "Users") {
+        sheet.appendRow(["U001", "admin", "admin123", "ผู้ดูแลระบบ (Admin)", "admin"]);
+        sheet.appendRow(["U002", "user", "user123", "พนักงานคลัง (User)", "user"]);
+      } else if (sheetName === "Settings") {
+        sheet.appendRow(["storeName", "ปากน้ำ สโตร์ 2026"]);
+        sheet.appendRow(["storeAddress", "123/45 ถนนประโคนชัย ต.ปากน้ำ อ.เมือง จ.สมุทรปราการ 10270"]);
+        sheet.appendRow(["storePhone", "081-234-5678"]);
+        sheet.appendRow(["storeLogo", "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=200"]);
+      } else if (sheetName === "Products") {
+        sheet.appendRow(["P001", "PROD-001", "กล่องพัสดุ Size A", "อุปกรณ์แพ็คกิ้ง", "150", "30", "https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&q=80&w=200"]);
+        sheet.appendRow(["P002", "PROD-002", "เทปกาวปิดกล่อง 2 นิ้ว", "อุปกรณ์แพ็คกิ้ง", "85", "20", "https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&q=80&w=200"]);
+        sheet.appendRow(["P003", "PROD-003", "ซองกันกระแทก 5x8 นิ้ว", "อุปกรณ์แพ็คกิ้ง", "15", "50", "https://images.unsplash.com/photo-1513151233558-d860c5398176?auto=format&fit=crop&q=80&w=200"]);
+        sheet.appendRow(["P004", "PROD-004", "กระดาษพิมพ์สติกเกอร์ A4", "เครื่องเขียน", "200", "40", "https://images.unsplash.com/photo-1586075010923-2dd4570fb338?auto=format&fit=crop&q=80&w=200"]);
+      }
+    }
+  }
+  
+  return {
+    success: true,
+    message: createdSheets.length > 0 
+      ? "สร้างตารางฐานข้อมูลเรียบร้อยแล้ว: " + createdSheets.join(", ") 
+      : "ตารางฐานข้อมูลทั้งหมดได้รับการติดตั้งไว้ก่อนหน้านี้แล้ว"
+  };
+}
+
+function sheetToObjects(sheetName) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return [];
+  
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+  
+  var headers = data[0];
+  var rows = data.slice(1);
+  
+  return rows.map(function(row) {
+    var obj = {};
+    headers.forEach(function(header, idx) {
+      obj[header] = row[idx];
+    });
+    return obj;
+  });
+}
+
+function authenticateUser(username, password) {
+  var targetUsername = String(username).trim();
+  var targetPassword = String(password).trim();
+  
+  var users = sheetToObjects("Users");
+  for (var i = 0; i < users.length; i++) {
+    var dbUser = users[i];
+    if (String(dbUser.username).trim() === targetUsername && String(dbUser.password).trim() === targetPassword) {
+      return {
+        id: dbUser.id,
+        username: dbUser.username,
+        name: dbUser.name,
+        role: dbUser.role
+      };
+    }
+  }
+  return null;
+}
+
+function getStoreSettings() {
+  var settingsList = sheetToObjects("Settings");
+  var settingsObj = {};
+  settingsList.forEach(function(item) {
+    settingsObj[item.key] = item.value;
+  });
+  return settingsObj;
+}
+
+function saveStoreSettings(settingsData) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName("Settings");
+  if (!sheet) return { success: false, message: "ไม่พบตาราง Settings" };
+  
+  var dataRange = sheet.getDataRange();
+  var values = dataRange.getValues();
+  
+  for (var key in settingsData) {
+    var value = settingsData[key];
+    var found = false;
+    for (var i = 1; i < values.length; i++) {
+      if (values[i][0] === key) {
+        sheet.getRange(i + 1, 2).setValue(value);
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      sheet.appendRow([key, value]);
+    }
+  }
+  return { success: true, message: "บันทึกข้อมูลการตั้งค่าสำเร็จแล้ว" };
+}
+
+function getUsers() {
+  return sheetToObjects("Users").map(function(user) {
+    return {
+      id: user.id,
+      username: user.username,
+      password: user.password,
+      name: user.name,
+      role: user.role
+    };
+  });
+}
+
+function saveUser(userData) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName("Users");
+  if (!sheet) return { success: false, message: "ไม่พบตาราง Users" };
+  
+  var values = sheet.getDataRange().getValues();
+  var headers = values[0];
+  var idColIdx = headers.indexOf("id");
+  
+  var userId = userData.id;
+  var isNew = !userId;
+  
+  if (isNew) {
+    userId = "U" + Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd-HHmmss") + "-" + Math.floor(Math.random() * 1000);
+  }
+  
+  var rowData = [
+    userId,
+    String(userData.username).trim(),
+    String(userData.password).trim(),
+    userData.name,
+    userData.role
+  ];
+  
+  if (isNew) {
+    sheet.appendRow(rowData);
+    return { success: true, message: "เพิ่มพนักงานใหม่สำเร็จ" };
+  } else {
+    for (var i = 1; i < values.length; i++) {
+      if (values[i][idColIdx] === userId) {
+        sheet.getRange(i + 1, 1, 1, rowData.length).setValues([rowData]);
+        return { success: true, message: "แก้ไขข้อมูลพนักงานสำเร็จ" };
+      }
+    }
+  }
+  return { success: false, message: "ไม่พบข้อมูลพนักงานที่ต้องการแก้ไข" };
+}
+
+function deleteUser(userId) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName("Users");
+  if (!sheet) return { success: false, message: "ไม่พบตาราง Users" };
+  
+  var values = sheet.getDataRange().getValues();
+  for (var i = 1; i < values.length; i++) {
+    if (values[i][0] === userId) {
+      if (values[i][1] === "admin") {
+        return { success: false, message: "ไม่สามารถลบผู้ใช้งาน Admin หลักระบบได้" };
+      }
+      sheet.deleteRow(i + 1);
+      return { success: true, message: "ลบผู้ใช้งานเรียบร้อยแล้ว" };
+    }
+  }
+  return { success: false, message: "ไม่พบผู้ใช้งานที่ระบุ" };
+}
+
+function uploadImageToDrive(base64Data, fileName) {
+  if (!base64Data) return { success: true, url: "", warning: null };
+  try {
+    var folderName = "Paknam_Inventory_Images";
+    var folders = DriveApp.getFoldersByName(folderName);
+    var folder;
+    if (folders.hasNext()) {
+      folder = folders.next();
+    } else {
+      folder = DriveApp.createFolder(folderName);
+      try {
+        folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      } catch (shareErr) {
+        Logger.log("Could not set folder sharing options: " + shareErr.toString());
+      }
+    }
+    
+    var parts = base64Data.split(",");
+    var contentType = "image/jpeg";
+    var b64Content = parts[0];
+    if (parts.length > 1) {
+      contentType = parts[0].split(";")[0].split(":")[1];
+      b64Content = parts[1];
+    }
+    
+    var decoded = Utilities.base64Decode(b64Content);
+    var blob = Utilities.newBlob(decoded, contentType, fileName || "upload_image.jpg");
+    var file = folder.createFile(blob);
+    
+    try {
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (shareErr) {
+      Logger.log("Could not set file sharing options: " + shareErr.toString());
+    }
+    
+    var fileId = file.getId();
+    var imageUrl = "https://lh3.googleusercontent.com/d/" + fileId;
+    return { success: true, url: imageUrl, warning: null };
+  } catch (error) {
+    Logger.log("Upload failed: " + error.toString());
+    return {
+      success: false,
+      url: "",
+      warning: "ไม่สามารถอัปโหลดรูปภาพลง Google Drive ได้ชั่วคราว (เนื่องจากข้อจำกัดด้านสิทธิ์ของบัญชี): " + error.toString()
+    };
+  }
+}
+
+function getInventory() {
+  return sheetToObjects("Products").map(function(prod) {
+    return {
+      id: prod.id,
+      code: String(prod.code),
+      name: String(prod.name),
+      category: String(prod.category),
+      stock: Number(prod.stock || 0),
+      min: Number(prod.min || 0),
+      imageUrl: prod.imageUrl || ""
+    };
+  });
+}
+
+function saveProduct(productData) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName("Products");
+  if (!sheet) return { success: false, message: "ไม่พบตาราง Products" };
+  
+  var values = sheet.getDataRange().getValues();
+  var headers = values[0];
+  var idColIdx = headers.indexOf("id");
+  
+  var prodId = productData.id;
+  var isNew = !prodId;
+  var warningMsg = null;
+  
+  var imgUrl = productData.imageUrl;
+  if (productData.imageBase64) {
+    var uploadResult = uploadImageToDrive(productData.imageBase64, (productData.code || "PROD") + "_" + Date.now() + ".jpg");
+    if (uploadResult.warning) {
+      warningMsg = uploadResult.warning;
+    }
+    if (uploadResult.url) {
+      imgUrl = uploadResult.url;
+    }
+  }
+  
+  if (isNew) {
+    prodId = "P" + Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd-HHmmss") + "-" + Math.floor(Math.random() * 1000);
+  }
+  
+  var rowData = [
+    prodId,
+    String(productData.code).trim(),
+    String(productData.name).trim(),
+    String(productData.category).trim(),
+    Number(productData.stock || 0),
+    Number(productData.min || 0),
+    imgUrl || ""
+  ];
+  
+  if (isNew) {
+    for (var i = 1; i < values.length; i++) {
+      if (String(values[i][1]).trim() === String(productData.code).trim()) {
+        return { success: false, message: "รหัสสินค้า '" + productData.code + "' มีอยู่แล้วในคลัง" };
+      }
+    }
+    sheet.appendRow(rowData);
+    return { success: true, message: "เพิ่มข้อมูลสินค้าใหม่สำเร็จแล้ว", id: prodId, warning: warningMsg };
+  } else {
+    for (var i = 1; i < values.length; i++) {
+      if (values[i][idColIdx] === prodId) {
+        for (var j = 1; j < values.length; j++) {
+          if (j !== i && String(values[j][1]).trim() === String(productData.code).trim()) {
+            return { success: false, message: "รหัสสินค้า '" + productData.code + "' มีอยู่แล้วในระบบ" };
+          }
+        }
+        sheet.getRange(i + 1, 1, 1, rowData.length).setValues([rowData]);
+        return { success: true, message: "อัปเดตข้อมูลสินค้าสำเร็จแล้ว", id: prodId, warning: warningMsg };
+      }
+    }
+  }
+  return { success: false, message: "ไม่พบสินค้าที่ต้องการบันทึก" };
+}
+
+function deleteProduct(productId) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName("Products");
+  if (!sheet) return { success: false, message: "ไม่พบตาราง Products" };
+  
+  var values = sheet.getDataRange().getValues();
+  for (var i = 1; i < values.length; i++) {
+    if (values[i][0] === productId) {
+      sheet.deleteRow(i + 1);
+      return { success: true, message: "ลบสินค้าสำเร็จเรียบร้อยแล้ว" };
+    }
+  }
+  return { success: false, message: "ไม่พบสินค้าคลังสินค้าที่เลือก" };
+}
+
+function getTransactions() {
+  return sheetToObjects("Transactions").map(function(t) {
+    return {
+      id: t.id,
+      type: t.type,
+      productId: t.productId,
+      qty: Number(t.qty || 0),
+      date: t.date,
+      note: t.note || "",
+      user: t.user || "",
+      status: t.status || "",
+      defectType: t.defectType || "",
+      condition: t.condition || "",
+      imageUrl: t.imageUrl || ""
+    };
+  });
+}
+
+function createTransaction(txData) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var prodSheet = ss.getSheetByName("Products");
+  var txSheet = ss.getSheetByName("Transactions");
+  
+  if (!prodSheet || !txSheet) {
+    return { success: false, message: "ตาราง Products หรือ Transactions หายไปจากระบบ" };
+  }
+  
+  var prodValues = prodSheet.getDataRange().getValues();
+  var prodHeaders = prodValues[0];
+  var prodIdIdx = prodHeaders.indexOf("id");
+  var prodStockIdx = prodHeaders.indexOf("stock");
+  
+  var targetProdId = txData.productId;
+  var txType = txData.type;
+  var txQty = Number(txData.qty);
+  
+  if (isNaN(txQty) || txQty <= 0) {
+    return { success: false, message: "กรุณาระบุจำนวนสินค้าที่ถูกต้อง" };
+  }
+  
+  var productRowIndex = -1;
+  var currentStock = 0;
+  for (var i = 1; i < prodValues.length; i++) {
+    if (prodValues[i][prodIdIdx] === targetProdId) {
+      productRowIndex = i + 1;
+      currentStock = Number(prodValues[i][prodStockIdx]);
+      break;
+    }
+  }
+  if (productRowIndex === -1) {
+    return { success: false, message: "ไม่พบสินค้าในสารบบ" };
+  }
+  
+  var updatedStock = currentStock;
+  if (txType === "IN") {
+    updatedStock = currentStock + txQty;
+  } else if (txType === "OUT" || txType === "DEFECT") {
+    if (currentStock < txQty) {
+      return { success: false, message: "สินค้าไม่เพียงพอเบิก (คงเหลือ " + currentStock + " ชิ้น)" };
+    }
+    updatedStock = currentStock - txQty;
+  } else if (txType === "RETURN") {
+    if (txData.condition === "สมบูรณ์") {
+      updatedStock = currentStock + txQty;
+    }
+  }
+  
+  var warningMsg = null;
+  var imgUrl = "";
+  if (txData.imageBase64) {
+    var uploadResult = uploadImageToDrive(txData.imageBase64, "TX_" + txType + "_" + Date.now() + ".jpg");
+    if (uploadResult.warning) {
+      warningMsg = uploadResult.warning;
+    }
+    if (uploadResult.url) {
+      imgUrl = uploadResult.url;
+    }
+  }
+  
+  var txId = "TX" + Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd-HHmmss") + "-" + Math.floor(Math.random() * 1000);
+  var txDateStr = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd HH:mm:ss");
+  
+  var txRow = [
+    txId,
+    txType,
+    targetProdId,
+    txQty,
+    txDateStr,
+    txData.note || "",
+    txData.user || "System",
+    txData.status || "Completed",
+    txData.defectType || "",
+    txData.condition || "",
+    imgUrl
+  ];
+  
+  txSheet.appendRow(txRow);
+  prodSheet.getRange(productRowIndex, prodStockIdx + 1).setValue(updatedStock);
+  
+  return { 
+    success: true, 
+    message: "บันทึกและอัปเดตสต๊อกสินค้าเรียบร้อยแล้ว", 
+    txId: txId, 
+    updatedStock: updatedStock,
+    warning: warningMsg 
+  };
+}
